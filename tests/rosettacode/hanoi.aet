@@ -1,1 +1,1 @@
-!v1;hanoi(n:int,from:string,to:string,via:string){if n>0{hanoi(n-1,from,via,to);pf("Move disk %d from %s to %s\n",n,from,to);hanoi(n-1,via,to,from)}};main(){hanoi(4,"A","B","C")}
+!v1;hanoi(n,from,to,via){if n>0{hanoi(n-1,from,via,to);pf("Move disk %d from %s to %s\n",n,from,to);hanoi(n-1,via,to,from)}};main(){hanoi(4,"A","B","C")}
