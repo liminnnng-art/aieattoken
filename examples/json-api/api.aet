@@ -1,0 +1,1 @@
+@Config{Host:string;Port:int;Debug:bool};LoadConfig(path)->(Config,error){data:=rf(path)?!"read config";cfg:=Config{};Ju(data,&cfg)?!"parse config";if cfg.Host==""{cfg.Host="localhost"};if cfg.Port==0{cfg.Port=8080};^cfg,nil};Config.String()->string{^sf("%s:%d (debug=%v)",c.Host,c.Port,c.Debug)};main(){cfg:=LoadConfig("config.json")?;pl(cfg)}

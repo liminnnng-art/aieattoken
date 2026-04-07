@@ -62,6 +62,7 @@ export declare const Shr: import("chevrotain").TokenType;
 export declare const Inc: import("chevrotain").TokenType;
 export declare const Dec: import("chevrotain").TokenType;
 export declare const Ellipsis: import("chevrotain").TokenType;
+export declare const DotDot: import("chevrotain").TokenType;
 export declare const Plus: import("chevrotain").TokenType;
 export declare const Minus: import("chevrotain").TokenType;
 export declare const Star: import("chevrotain").TokenType;
@@ -114,6 +115,7 @@ export declare class AETParser extends CstParser {
     private ifStmt;
     private hasIfInit;
     private forStmt;
+    private isDotDotFor;
     private isThreeClauseFor;
     private isRangeLoop;
     private switchStmt;

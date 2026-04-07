@@ -1,0 +1,211 @@
+{
+  "_version": "0.1",
+  "_tokenizer": "cl100k_base",
+  "_description": "Go stdlib alias mapping for Aieattoken. Every alias is a single cl100k_base token.",
+  "_count": 50,
+  "aliases": {
+    "pl": {
+      "go": "fmt.Println",
+      "pkg": "fmt"
+    },
+    "pf": {
+      "go": "fmt.Printf",
+      "pkg": "fmt"
+    },
+    "sf": {
+      "go": "fmt.Sprintf",
+      "pkg": "fmt"
+    },
+    "Ef": {
+      "go": "fmt.Errorf",
+      "pkg": "fmt"
+    },
+    "fw": {
+      "go": "fmt.Fprintf",
+      "pkg": "fmt"
+    },
+    "Sn": {
+      "go": "fmt.Scan",
+      "pkg": "fmt"
+    },
+    "En": {
+      "go": "errors.New",
+      "pkg": "errors"
+    },
+    "ei": {
+      "go": "errors.Is",
+      "pkg": "errors"
+    },
+    "ea": {
+      "go": "errors.As",
+      "pkg": "errors"
+    },
+    "Cb": {
+      "go": "context.Background",
+      "pkg": "context"
+    },
+    "Cc": {
+      "go": "context.WithCancel",
+      "pkg": "context"
+    },
+    "ct": {
+      "go": "context.WithTimeout",
+      "pkg": "context"
+    },
+    "Cd": {
+      "go": "context.TODO",
+      "pkg": "context"
+    },
+    "Sc": {
+      "go": "strings.Contains",
+      "pkg": "strings"
+    },
+    "ss": {
+      "go": "strings.Split",
+      "pkg": "strings"
+    },
+    "St": {
+      "go": "strings.TrimSpace",
+      "pkg": "strings"
+    },
+    "Sp": {
+      "go": "strings.HasPrefix",
+      "pkg": "strings"
+    },
+    "sx": {
+      "go": "strings.HasSuffix",
+      "pkg": "strings"
+    },
+    "Sr": {
+      "go": "strings.Replace",
+      "pkg": "strings"
+    },
+    "sj": {
+      "go": "strings.Join",
+      "pkg": "strings"
+    },
+    "Sl": {
+      "go": "strings.ToLower",
+      "pkg": "strings"
+    },
+    "Ai": {
+      "go": "strconv.Atoi",
+      "pkg": "strconv"
+    },
+    "ia": {
+      "go": "strconv.Itoa",
+      "pkg": "strconv"
+    },
+    "jm": {
+      "go": "json.Marshal",
+      "pkg": "encoding/json"
+    },
+    "Ju": {
+      "go": "json.Unmarshal",
+      "pkg": "encoding/json"
+    },
+    "jd": {
+      "go": "json.NewDecoder",
+      "pkg": "encoding/json"
+    },
+    "Je": {
+      "go": "json.NewEncoder",
+      "pkg": "encoding/json"
+    },
+    "hl": {
+      "go": "http.ListenAndServe",
+      "pkg": "net/http"
+    },
+    "hf": {
+      "go": "http.HandleFunc",
+      "pkg": "net/http"
+    },
+    "hr": {
+      "go": "http.NewRequest",
+      "pkg": "net/http"
+    },
+    "hg": {
+      "go": "http.Get",
+      "pkg": "net/http"
+    },
+    "He": {
+      "go": "http.Error",
+      "pkg": "net/http"
+    },
+    "Fo": {
+      "go": "os.Open",
+      "pkg": "os"
+    },
+    "Fc": {
+      "go": "os.Create",
+      "pkg": "os"
+    },
+    "Ge": {
+      "go": "os.Getenv",
+      "pkg": "os"
+    },
+    "rf": {
+      "go": "os.ReadFile",
+      "pkg": "os"
+    },
+    "wf": {
+      "go": "os.WriteFile",
+      "pkg": "os"
+    },
+    "Ra": {
+      "go": "io.ReadAll",
+      "pkg": "io"
+    },
+    "ic": {
+      "go": "io.Copy",
+      "pkg": "io"
+    },
+    "tn": {
+      "go": "time.Now",
+      "pkg": "time"
+    },
+    "Ts": {
+      "go": "time.Since",
+      "pkg": "time"
+    },
+    "Tk": {
+      "go": "time.Sleep",
+      "pkg": "time"
+    },
+    "Tp": {
+      "go": "time.Parse",
+      "pkg": "time"
+    },
+    "wg": {
+      "go": "sync.WaitGroup",
+      "pkg": "sync",
+      "isType": true
+    },
+    "mx": {
+      "go": "sync.Mutex",
+      "pkg": "sync",
+      "isType": true
+    },
+    "rw": {
+      "go": "sync.RWMutex",
+      "pkg": "sync",
+      "isType": true
+    },
+    "So": {
+      "go": "sort.Slice",
+      "pkg": "sort"
+    },
+    "lp": {
+      "go": "log.Println",
+      "pkg": "log"
+    },
+    "Lf": {
+      "go": "log.Fatal",
+      "pkg": "log"
+    },
+    "pj": {
+      "go": "filepath.Join",
+      "pkg": "path/filepath"
+    }
+  }
+}

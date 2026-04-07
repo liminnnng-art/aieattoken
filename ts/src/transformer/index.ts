@@ -292,6 +292,23 @@ function transformIfStmt(node: CstNode): IR.IRIfStmt {
 function transformForStmt(node: CstNode): IR.IRForStmt | IR.IRRangeStmt {
   const si = nextStmtIndex();
 
+  // DotDot range: for i:=start..end { ... }
+  if (tok(node, "DotDot")) {
+    const loopVar = tokAll(node, "Ident")[0] || "i";
+    const exprs = children(node, "expr");
+    const start = exprs[0] ? transformExpr(exprs[0]) : { kind: "BasicLit" as const, type: "INT" as const, value: "0" };
+    const end = exprs[1] ? transformExpr(exprs[1]) : { kind: "BasicLit" as const, type: "INT" as const, value: "0" };
+    const sl = children(node, "stmtList");
+    const body = sl.length > 0 ? transformStmtList(sl[sl.length - 1]) : { kind: "BlockStmt" as const, stmts: [] };
+
+    // Expand to: for i := start; i < end; i++
+    const init: IR.IRShortDeclStmt = { kind: "ShortDeclStmt", names: [loopVar], values: [start], stmtIndex: 0 };
+    const cond: IR.IRBinaryExpr = { kind: "BinaryExpr", left: { kind: "Ident", name: loopVar }, op: "<", right: end };
+    const post: IR.IRIncDecStmt = { kind: "IncDecStmt", x: { kind: "Ident", name: loopVar }, op: "++", stmtIndex: 0 };
+
+    return { kind: "ForStmt", init, cond, post, body, stmtIndex: si };
+  }
+
   // Range loop: for k, v := range expr { ... }
   if (tok(node, "Range")) {
     const el = child(node, "exprList");

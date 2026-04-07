@@ -71,6 +71,7 @@ export const Shr = createToken({ name: "Shr", pattern: />>/ });
 export const Inc = createToken({ name: "Inc", pattern: /\+\+/ });
 export const Dec = createToken({ name: "Dec", pattern: /--/ });
 export const Ellipsis = createToken({ name: "Ellipsis", pattern: /\.\.\./ });
+export const DotDot = createToken({ name: "DotDot", pattern: /\.\./ });
 export const Plus = createToken({ name: "Plus", pattern: /\+/, longer_alt: undefined });
 export const Minus = createToken({ name: "Minus", pattern: /-/, longer_alt: undefined });
 export const Star = createToken({ name: "Star", pattern: /\*/, longer_alt: undefined });
@@ -112,7 +113,7 @@ export const WS = createToken({ name: "WS", pattern: /[\s\t\n\r]+/, group: Lexer
 const allTokens = [
     WS,
     // Multi-char operators (longer first)
-    VersionMarker, QuestionBang, Ellipsis, Arrow, ChanArrow, ShortDecl,
+    VersionMarker, QuestionBang, Ellipsis, DotDot, Arrow, ChanArrow, ShortDecl,
     ShlAssign, ShrAssign, AndAssign, OrAssign, XorAssign,
     PlusAssign, MinusAssign, MulAssign, DivAssign, ModAssign,
     LogAnd, LogOr, Eq, Neq, Leq, Geq, Shl, Shr, Inc, Dec,
@@ -446,6 +447,18 @@ export class AETParser extends CstParser {
                     this.SUBRULE(this.stmtList);
                     this.CONSUME(RBrace);
                 } },
+            // for i:=start..end { ... } (numeric range)
+            { GATE: () => this.isDotDotFor(), ALT: () => {
+                    this.CONSUME2(Ident); // loop var
+                    this.CONSUME2(ShortDecl);
+                    this.SUBRULE4(this.expr); // start
+                    this.CONSUME(DotDot);
+                    this.SUBRULE5(this.expr); // end
+                    this.noCompositeLit = false;
+                    this.CONSUME4(LBrace);
+                    this.SUBRULE4(this.stmtList);
+                    this.CONSUME4(RBrace);
+                } },
             // for init; cond; post { ... } (3-clause)
             { GATE: () => this.isThreeClauseFor(), ALT: () => {
                     this.SUBRULE2(this.simpleStmt); // init
@@ -468,6 +481,20 @@ export class AETParser extends CstParser {
                 } },
         ]);
     });
+    isDotDotFor() {
+        let i = 1;
+        while (i < 30) {
+            const t = this.LA(i);
+            if (!t)
+                break;
+            if (tokenMatcher(t, LBrace))
+                break;
+            if (tokenMatcher(t, DotDot))
+                return true;
+            i++;
+        }
+        return false;
+    }
     isThreeClauseFor() {
         // Count semicolons before the opening brace
         let semiCount = 0;
