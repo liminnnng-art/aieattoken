@@ -136,8 +136,10 @@ export declare class AETParser extends CstParser {
     private postfixExpr;
     private isSliceExpr;
     private primaryExpr;
+    private kvExpr;
+    private litBody;
     private compositeLit;
-    private isCompositeLitContext;
+    private noCompositeLit;
     private isLambda;
 }
 export declare function parse(code: string): {

@@ -754,7 +754,7 @@ function transformPrimaryExpr(node: CstNode): IR.IRExpr {
     return { kind: "FuncLit", params, results: [], body };
   }
 
-  // Composite literal: Ident { exprs }
+  // Composite literal: Ident { kvExprs }
   const compLit = child(node, "compositeLit");
   if (compLit) {
     const typeName = tok(compLit, "Ident") || "";
@@ -762,7 +762,8 @@ function transformPrimaryExpr(node: CstNode): IR.IRExpr {
     const typeExpr: IR.IRExpr = alias
       ? { kind: "SelectorExpr", x: { kind: "Ident", name: alias.goFunc.split(".")[0] }, sel: alias.goFunc.split(".")[1] }
       : { kind: "Ident", name: typeName };
-    const elts = children(compLit, "expr").map(transformExpr);
+    const lb = child(compLit, "litBody");
+    const elts = lb ? transformLitBody(lb) : [];
     return { kind: "CompositeLit", type: typeExpr, elts };
   }
 
@@ -799,17 +800,31 @@ function transformPrimaryExpr(node: CstNode): IR.IRExpr {
   if (tok(node, "False")) return { kind: "Ident", name: "false" };
   if (tok(node, "Nil")) return { kind: "Ident", name: "nil" };
 
-  // Map/Slice type expression
+  // Map type expression or literal
   if (tok(node, "Map")) {
     const types = children(node, "typeExpr");
     const key = types[0] ? transformTypeExpr(types[0]) : IR.simpleType("string");
     const val = types[1] ? transformTypeExpr(types[1]) : IR.simpleType("interface{}");
-    return { kind: "MapTypeExpr", key: { kind: "Ident", name: key.name }, value: { kind: "Ident", name: val.name } };
+    const typeExpr: IR.IRExpr = { kind: "MapTypeExpr", key: { kind: "Ident", name: key.name }, value: { kind: "Ident", name: val.name } };
+    // Check for literal body
+    const lb = child(node, "litBody");
+    if (lb) {
+      const elts = transformLitBody(lb);
+      return { kind: "CompositeLit", type: typeExpr, elts };
+    }
+    return typeExpr;
   }
+  // Slice type expression or literal
   if (tok(node, "LBrack") && tok(node, "RBrack")) {
     const te = child(node, "typeExpr");
     const elt = te ? transformTypeExpr(te) : IR.simpleType("interface{}");
-    return { kind: "ArrayTypeExpr", elt: { kind: "Ident", name: elt.name } };
+    const typeExpr: IR.IRExpr = { kind: "ArrayTypeExpr", elt: { kind: "Ident", name: elt.name } };
+    const lb = child(node, "litBody");
+    if (lb) {
+      const elts = transformLitBody(lb);
+      return { kind: "CompositeLit", type: typeExpr, elts };
+    }
+    return typeExpr;
   }
 
   // Identifier — check for stdlib alias
@@ -827,6 +842,22 @@ function transformPrimaryExpr(node: CstNode): IR.IRExpr {
     return { kind: "Ident", name: ident };
   }
 
+  return { kind: "Ident", name: "_" };
+}
+
+function transformLitBody(node: CstNode): IR.IRExpr[] {
+  return children(node, "kvExpr").map(transformKvExpr);
+}
+
+function transformKvExpr(node: CstNode): IR.IRExpr {
+  const exprs = children(node, "expr");
+  if (exprs.length === 2 && tok(node, "Colon")) {
+    // Key: value
+    return { kind: "KeyValueExpr", key: transformExpr(exprs[0]), value: transformExpr(exprs[1]) };
+  }
+  if (exprs.length >= 1) {
+    return transformExpr(exprs[0]);
+  }
   return { kind: "Ident", name: "_" };
 }
 

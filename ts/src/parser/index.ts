@@ -413,7 +413,8 @@ export class AETParser extends CstParser {
   // Note: condition expression must not consume the opening {
   private ifStmt = this.RULE("ifStmt", () => {
     this.CONSUME(If);
-    // Check for init; cond pattern
+    // Check for init; cond pattern (composite lit disabled in conditions)
+    this.noCompositeLit = true;
     this.OR([
       { GATE: () => this.hasIfInit(), ALT: () => {
         this.SUBRULE(this.simpleStmt);
@@ -424,6 +425,7 @@ export class AETParser extends CstParser {
         this.SUBRULE2(this.expr);
       }},
     ]);
+    this.noCompositeLit = false;
     this.CONSUME(LBrace);
     this.SUBRULE(this.stmtList);
     this.CONSUME(RBrace);
@@ -460,6 +462,7 @@ export class AETParser extends CstParser {
   // Uses GATE to detect: range, 3-clause, condition-only, or infinite
   private forStmt = this.RULE("forStmt", () => {
     this.CONSUME(For);
+    this.noCompositeLit = true;
     this.OR([
       // for k, v := range expr { ... }
       { GATE: () => this.isRangeLoop(), ALT: () => {
@@ -467,6 +470,7 @@ export class AETParser extends CstParser {
         this.CONSUME(ShortDecl);
         this.CONSUME(Range);
         this.SUBRULE(this.expr);
+        this.noCompositeLit = false;
         this.CONSUME(LBrace);
         this.SUBRULE(this.stmtList);
         this.CONSUME(RBrace);
@@ -478,6 +482,7 @@ export class AETParser extends CstParser {
         this.SUBRULE2(this.expr);           // cond
         this.CONSUME3(Semi);
         this.SUBRULE3(this.simpleStmt);    // post
+        this.noCompositeLit = false;
         this.CONSUME2(LBrace);
         this.SUBRULE2(this.stmtList);
         this.CONSUME2(RBrace);
@@ -485,6 +490,7 @@ export class AETParser extends CstParser {
       // for cond { ... } or for { ... } (infinite)
       { ALT: () => {
         this.OPTION(() => this.SUBRULE3(this.expr));
+        this.noCompositeLit = false;
         this.CONSUME3(LBrace);
         this.SUBRULE3(this.stmtList);
         this.CONSUME3(RBrace);
@@ -525,7 +531,9 @@ export class AETParser extends CstParser {
   // Switch statement
   private switchStmt = this.RULE("switchStmt", () => {
     this.CONSUME(Switch);
+    this.noCompositeLit = true;
     this.OPTION(() => this.SUBRULE(this.expr));
+    this.noCompositeLit = false;
     this.CONSUME(LBrace);
     this.MANY(() => this.SUBRULE(this.caseClause));
     this.CONSUME(RBrace);
@@ -655,11 +663,6 @@ export class AETParser extends CstParser {
 
   private expr = this.RULE("expr", () => {
     this.SUBRULE(this.orExpr);
-    // Key-value expression: expr : expr (used in composite literals and maps)
-    this.OPTION(() => {
-      this.CONSUME(Colon);
-      this.SUBRULE2(this.orExpr);
-    });
   });
 
   private orExpr = this.RULE("orExpr", () => {
@@ -875,22 +878,26 @@ export class AETParser extends CstParser {
       { ALT: () => this.CONSUME(True) },
       { ALT: () => this.CONSUME(False) },
       { ALT: () => this.CONSUME(Nil) },
-      // Map type in expression position: map[K]V{...}
+      // Map type literal: map[K]V or map[K]V{...}
       { ALT: () => {
         this.CONSUME(Map);
         this.CONSUME(LBrack);
         this.SUBRULE(this.typeExpr);
         this.CONSUME(RBrack);
         this.SUBRULE2(this.typeExpr);
+        this.OPTION5(() => this.SUBRULE2(this.litBody));
       }},
-      // Slice type in expression position: []T{...}
+      // Slice type literal: []T or []T{...}
       { ALT: () => {
         this.CONSUME2(LBrack);
         this.CONSUME2(RBrack);
         this.SUBRULE3(this.typeExpr);
+        this.OPTION6(() => this.SUBRULE3(this.litBody));
       }},
       // Composite literal: Ident { kvpairs } — must come before plain Ident
+      // Disabled inside for/if/switch conditions (same as Go: ambiguity resolved by context)
       { GATE: () => {
+        if (this.noCompositeLit) return false;
         const t1 = this.LA(1);
         const t2 = this.LA(2);
         return t1 && t2 && t1.tokenType === Ident && t2.tokenType === LBrace;
@@ -900,32 +907,36 @@ export class AETParser extends CstParser {
     ]);
   });
 
-  private compositeLit = this.RULE("compositeLit", () => {
-    this.CONSUME(Ident);  // Type name
-    this.CONSUME(LBrace);
+  // Key-value or plain expression: expr OR expr:expr (used in composite literals)
+  private kvExpr = this.RULE("kvExpr", () => {
+    this.SUBRULE(this.expr);
     this.OPTION(() => {
-      this.SUBRULE(this.expr);
+      this.CONSUME(Colon);
+      this.SUBRULE2(this.expr);
+    });
+  });
+
+  // Shared literal body: { kvExpr, kvExpr, ... }
+  private litBody = this.RULE("litBody", () => {
+    this.CONSUME(LBrace);
+    this.OPTION2(() => {
+      this.SUBRULE(this.kvExpr);
       this.MANY(() => {
         this.CONSUME(Comma);
-        this.SUBRULE2(this.expr);
+        this.SUBRULE2(this.kvExpr);
       });
-      this.OPTION2(() => this.CONSUME2(Comma));
+      this.OPTION3(() => this.CONSUME2(Comma));
     });
     this.CONSUME(RBrace);
   });
 
-  private isCompositeLitContext(): boolean {
-    // Look back to find the token just before current position
-    // LA(1) is '{'. The token before that should be Ident or RBrack for composite lit.
-    // We need to find LA(0) — but Chevrotain doesn't expose it.
-    // Workaround: look at the token BEFORE LA(1) in the raw input array
-    const lbrace = this.LA(1);
-    if (!lbrace) return false;
-    const idx = this.input.indexOf(lbrace);
-    if (idx <= 0) return false;
-    const prev = this.input[idx - 1];
-    return prev.tokenType === Ident || prev.tokenType === RBrack;
-  }
+  private compositeLit = this.RULE("compositeLit", () => {
+    this.CONSUME(Ident);  // Type name
+    this.SUBRULE(this.litBody);
+  });
+
+  // Flag: when true, disable composite literal parsing (inside for/if/switch conditions)
+  private noCompositeLit = false;
 
   private isLambda(): boolean {
     // Check if this is {params|body} pattern

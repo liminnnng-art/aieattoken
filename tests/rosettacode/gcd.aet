@@ -1,0 +1,1 @@
+!v1;gcd(a:int,b:int)->int{for b!=0{a,b=b,a%b};^a};main(){pl(gcd(48,18))}

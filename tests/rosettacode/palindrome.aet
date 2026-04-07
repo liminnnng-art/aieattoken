@@ -1,0 +1,1 @@
+!v1;isPalindrome(s:string)->bool{runes:=[]rune(s);for i,j:=0,len(runes)-1;i<j;i,j=i+1,j-1{if runes[i]!=runes[j]{^false}};^true};main(){words:=[]string{"racecar","hello","level","madam"};for _,w:=range words{pf("%s: %v\n",w,isPalindrome(w))}}

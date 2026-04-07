@@ -1,0 +1,1 @@
+!v1;caesar(text:string,shift:int)->string{result:=make([]byte,len(text));for i,c:=range text{switch{case c>='a'&&c<='z':result[i]=byte('a'+(int(c-'a')+shift)%26);case c>='A'&&c<='Z':result[i]=byte('A'+(int(c-'A')+shift)%26);default:result[i]=byte(c)}};^string(result)};main(){plain:="The quick brown fox jumps over the lazy dog";enc:=caesar(plain,13);pl(enc);pl(caesar(enc,13))}
