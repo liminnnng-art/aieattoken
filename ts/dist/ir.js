@@ -1,5 +1,6 @@
 // IR (Intermediate Representation) types
 // Aligned with Go AST node types: FunctionDecl, IfStmt, ForStmt, AssignStmt, CallExpr, etc.
+// Java-specific nodes use Java_ prefix. Go emitter errors on Java_ nodes; Java emitter errors on Go-only nodes.
 // These exist only in memory — not serialized to file format.
 // Utility: create simple types
 export function simpleType(name) {

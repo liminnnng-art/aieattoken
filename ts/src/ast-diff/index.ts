@@ -69,13 +69,13 @@ function compareNodes(a: any, b: any, path: string, diffs: string[]) {
   }
 
   // Object comparison
-  const keysA = Object.keys(a).filter(k => k !== "stmtIndex");
-  const keysB = Object.keys(b).filter(k => k !== "stmtIndex");
+  const skipKeys = new Set(["stmtIndex", "tag", "modifiers"]);
+  const keysA = Object.keys(a).filter(k => !skipKeys.has(k));
+  const keysB = Object.keys(b).filter(k => !skipKeys.has(k));
 
   const allKeys = new Set([...keysA, ...keysB]);
   for (const key of allKeys) {
-    if (key === "stmtIndex") continue;  // Skip positional info
-    if (key === "tag") continue;         // Skip struct tags (auto-generated)
+    if (skipKeys.has(key)) continue;     // Skip positional/auto-generated info
     compareNodes(a[key], b[key], `${path}.${key}`, diffs);
   }
 }

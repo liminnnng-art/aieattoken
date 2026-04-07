@@ -1,0 +1,159 @@
+{
+  "_version": "0.2",
+  "_tokenizer": "cl100k_base",
+  "_description": "Java stdlib alias mapping for Aieattoken. Every alias is a single cl100k_base token.",
+  "_count": 30,
+  "aliases": {
+    "pl": {
+      "java": "System.out.println",
+      "pkg": "java.lang",
+      "auto": true
+    },
+    "pr": {
+      "java": "System.out.print",
+      "pkg": "java.lang",
+      "auto": true
+    },
+    "pf": {
+      "java": "System.out.printf",
+      "pkg": "java.lang",
+      "auto": true
+    },
+    "sf": {
+      "java": "String.format",
+      "pkg": "java.lang",
+      "auto": true
+    },
+    "Se": {
+      "java": "System.err.println",
+      "pkg": "java.lang",
+      "auto": true
+    },
+    "Sx": {
+      "java": "System.exit",
+      "pkg": "java.lang",
+      "auto": true
+    },
+    "Pi": {
+      "java": "Integer.parseInt",
+      "pkg": "java.lang",
+      "auto": true
+    },
+    "Sv": {
+      "java": "String.valueOf",
+      "pkg": "java.lang",
+      "auto": true
+    },
+    "Mx": {
+      "java": "Math.max",
+      "pkg": "java.lang",
+      "auto": true
+    },
+    "Mn": {
+      "java": "Math.min",
+      "pkg": "java.lang",
+      "auto": true
+    },
+    "Ma": {
+      "java": "Math.abs",
+      "pkg": "java.lang",
+      "auto": true
+    },
+    "Mr": {
+      "java": "Math.random",
+      "pkg": "java.lang",
+      "auto": true
+    },
+    "Cs": {
+      "java": "Collections.sort",
+      "pkg": "java.util.Collections",
+      "import": "java.util.Collections"
+    },
+    "Al": {
+      "java": "Arrays.asList",
+      "pkg": "java.util.Arrays",
+      "import": "java.util.Arrays"
+    },
+    "Ia": {
+      "java": "Arrays.sort",
+      "pkg": "java.util.Arrays",
+      "import": "java.util.Arrays"
+    },
+    "Fr": {
+      "java": "Files.readString",
+      "pkg": "java.nio.file.Files",
+      "import": "java.nio.file.Files"
+    },
+    "Fw": {
+      "java": "Files.writeString",
+      "pkg": "java.nio.file.Files",
+      "import": "java.nio.file.Files"
+    },
+    "Fl": {
+      "java": "Files.readAllLines",
+      "pkg": "java.nio.file.Files",
+      "import": "java.nio.file.Files"
+    },
+    "Po": {
+      "java": "Path.of",
+      "pkg": "java.nio.file.Path",
+      "import": "java.nio.file.Path"
+    },
+    "Ls": {
+      "java": "List.of",
+      "pkg": "java.util.List",
+      "import": "java.util.List"
+    },
+    "Ms": {
+      "java": "Map.of",
+      "pkg": "java.util.Map",
+      "import": "java.util.Map"
+    },
+    "Ge": {
+      "java": "System.getenv",
+      "pkg": "java.lang",
+      "auto": true
+    },
+    "Tn": {
+      "java": "System.nanoTime",
+      "pkg": "java.lang",
+      "auto": true
+    },
+    "Tm": {
+      "java": "System.currentTimeMillis",
+      "pkg": "java.lang",
+      "auto": true
+    },
+    "Tp": {
+      "java": "Thread.sleep",
+      "pkg": "java.lang",
+      "auto": true
+    },
+    "Ps": {
+      "java": "Pattern.compile",
+      "pkg": "java.util.regex.Pattern",
+      "import": "java.util.regex.Pattern"
+    },
+    "Sb": {
+      "java": "new StringBuilder",
+      "pkg": "java.lang",
+      "auto": true,
+      "isConstructor": true
+    },
+    "Oe": {
+      "java": "Optional.empty",
+      "pkg": "java.util.Optional",
+      "import": "java.util.Optional"
+    },
+    "Oo": {
+      "java": "Optional.of",
+      "pkg": "java.util.Optional",
+      "import": "java.util.Optional"
+    },
+    "Hc": {
+      "java": "HttpClient.newHttpClient",
+      "pkg": "java.net.http.HttpClient",
+      "import": "java.net.http.HttpClient"
+    }
+  }
+}

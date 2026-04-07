@@ -1,5 +1,6 @@
 // IR (Intermediate Representation) types
 // Aligned with Go AST node types: FunctionDecl, IfStmt, ForStmt, AssignStmt, CallExpr, etc.
+// Java-specific nodes use Java_ prefix. Go emitter errors on Java_ nodes; Java emitter errors on Go-only nodes.
 // These exist only in memory — not serialized to file format.
 
 export type IRNode =
@@ -26,7 +27,12 @@ export type IRNode =
   | IRSendStmt
   | IRBranchStmt
   | IRVarDecl
-  | IRConstDecl;
+  | IRConstDecl
+  // Java-specific nodes
+  | Java_ClassDecl
+  | Java_TryCatch
+  | Java_EnhancedFor
+  | Java_ThrowStmt;
 
 export type IRExpr =
   | IRIdent
@@ -52,7 +58,13 @@ export type IRExpr =
   | IRFuncTypeExpr
   | IRInterfaceTypeExpr
   | IRStructTypeExpr
-  | IRRawGoExpr;
+  | IRRawGoExpr
+  // Java-specific expressions
+  | Java_NewExpr
+  | Java_LambdaExpr
+  | Java_InstanceofExpr
+  | Java_CastExpr
+  | Java_TernaryExpr;
 
 export type IRType = {
   name: string;        // "int", "string", "error", "[]byte", "map[string]int", "*User", etc.
@@ -428,4 +440,91 @@ export function sliceType(elt: IRType): IRType {
 
 export function mapType(key: IRType, val: IRType): IRType {
   return { name: `map[${key.name}]${val.name}`, isMap: true, keyType: key, valueType: val };
+}
+
+// ============= Java-Specific IR Nodes =============
+// These are used by the Java reverse parser (Java → IR) and Java emitter (IR → Java).
+// Go emitter MUST error when encountering any Java_ node.
+
+// Java class declaration (wraps methods and fields)
+export interface Java_ClassDecl {
+  kind: "Java_ClassDecl";
+  name: string;
+  modifiers: string[];           // "public", "abstract", "final", etc.
+  superClass?: string;
+  interfaces: string[];
+  fields: IRField[];
+  methods: IRFuncDecl[];
+  constructors: IRFuncDecl[];
+  innerClasses: Java_ClassDecl[];
+  stmtIndex: number;
+}
+
+// Try-catch-finally
+export interface Java_TryCatch {
+  kind: "Java_TryCatch";
+  body: IRBlockStmt;
+  catches: Java_CatchClause[];
+  finallyBody?: IRBlockStmt;
+  resources?: IRNode[];          // try-with-resources
+  stmtIndex: number;
+}
+
+export interface Java_CatchClause {
+  exceptionType: IRType;
+  name: string;
+  body: IRBlockStmt;
+}
+
+// Enhanced for loop: for (Type x : collection) { ... }
+export interface Java_EnhancedFor {
+  kind: "Java_EnhancedFor";
+  varName: string;
+  varType?: IRType;
+  iterable: IRExpr;
+  body: IRBlockStmt;
+  stmtIndex: number;
+}
+
+// Throw statement
+export interface Java_ThrowStmt {
+  kind: "Java_ThrowStmt";
+  expr: IRExpr;
+  stmtIndex: number;
+}
+
+// new expression: new Type(args)
+export interface Java_NewExpr {
+  kind: "Java_NewExpr";
+  type: IRType;
+  args: IRExpr[];
+}
+
+// Lambda expression: (params) -> body
+export interface Java_LambdaExpr {
+  kind: "Java_LambdaExpr";
+  params: IRParam[];
+  body: IRBlockStmt | IRExpr;    // single expr or block
+}
+
+// instanceof check
+export interface Java_InstanceofExpr {
+  kind: "Java_InstanceofExpr";
+  expr: IRExpr;
+  type: IRType;
+}
+
+// Cast expression: (Type) expr
+export interface Java_CastExpr {
+  kind: "Java_CastExpr";
+  type: IRType;
+  expr: IRExpr;
+}
+
+// Ternary expression: cond ? a : b
+export interface Java_TernaryExpr {
+  kind: "Java_TernaryExpr";
+  cond: IRExpr;
+  ifTrue: IRExpr;
+  ifFalse: IRExpr;
 }

@@ -1,5 +1,5 @@
-export type IRNode = IRProgram | IRFuncDecl | IRStructDecl | IRInterfaceDecl | IRTypeAlias | IRBlockStmt | IRIfStmt | IRForStmt | IRRangeStmt | IRSwitchStmt | IRCaseClause | IRSelectStmt | IRCommClause | IRReturnStmt | IRDeferStmt | IRGoStmt | IRAssignStmt | IRShortDeclStmt | IRExprStmt | IRIncDecStmt | IRSendStmt | IRBranchStmt | IRVarDecl | IRConstDecl;
-export type IRExpr = IRIdent | IRBasicLit | IRCompositeLit | IRFuncLit | IRBinaryExpr | IRUnaryExpr | IRCallExpr | IRSelectorExpr | IRIndexExpr | IRSliceExpr | IRTypeAssertExpr | IRStarExpr | IRUnaryRecvExpr | IRKeyValueExpr | IRParenExpr | IRErrorPropExpr | IRPipeExpr | IRMapTypeExpr | IRArrayTypeExpr | IRChanTypeExpr | IRFuncTypeExpr | IRInterfaceTypeExpr | IRStructTypeExpr | IRRawGoExpr;
+export type IRNode = IRProgram | IRFuncDecl | IRStructDecl | IRInterfaceDecl | IRTypeAlias | IRBlockStmt | IRIfStmt | IRForStmt | IRRangeStmt | IRSwitchStmt | IRCaseClause | IRSelectStmt | IRCommClause | IRReturnStmt | IRDeferStmt | IRGoStmt | IRAssignStmt | IRShortDeclStmt | IRExprStmt | IRIncDecStmt | IRSendStmt | IRBranchStmt | IRVarDecl | IRConstDecl | Java_ClassDecl | Java_TryCatch | Java_EnhancedFor | Java_ThrowStmt;
+export type IRExpr = IRIdent | IRBasicLit | IRCompositeLit | IRFuncLit | IRBinaryExpr | IRUnaryExpr | IRCallExpr | IRSelectorExpr | IRIndexExpr | IRSliceExpr | IRTypeAssertExpr | IRStarExpr | IRUnaryRecvExpr | IRKeyValueExpr | IRParenExpr | IRErrorPropExpr | IRPipeExpr | IRMapTypeExpr | IRArrayTypeExpr | IRChanTypeExpr | IRFuncTypeExpr | IRInterfaceTypeExpr | IRStructTypeExpr | IRRawGoExpr | Java_NewExpr | Java_LambdaExpr | Java_InstanceofExpr | Java_CastExpr | Java_TernaryExpr;
 export type IRType = {
     name: string;
     isPointer?: boolean;
@@ -307,3 +307,67 @@ export declare function simpleType(name: string): IRType;
 export declare function pointerType(base: IRType): IRType;
 export declare function sliceType(elt: IRType): IRType;
 export declare function mapType(key: IRType, val: IRType): IRType;
+export interface Java_ClassDecl {
+    kind: "Java_ClassDecl";
+    name: string;
+    modifiers: string[];
+    superClass?: string;
+    interfaces: string[];
+    fields: IRField[];
+    methods: IRFuncDecl[];
+    constructors: IRFuncDecl[];
+    innerClasses: Java_ClassDecl[];
+    stmtIndex: number;
+}
+export interface Java_TryCatch {
+    kind: "Java_TryCatch";
+    body: IRBlockStmt;
+    catches: Java_CatchClause[];
+    finallyBody?: IRBlockStmt;
+    resources?: IRNode[];
+    stmtIndex: number;
+}
+export interface Java_CatchClause {
+    exceptionType: IRType;
+    name: string;
+    body: IRBlockStmt;
+}
+export interface Java_EnhancedFor {
+    kind: "Java_EnhancedFor";
+    varName: string;
+    varType?: IRType;
+    iterable: IRExpr;
+    body: IRBlockStmt;
+    stmtIndex: number;
+}
+export interface Java_ThrowStmt {
+    kind: "Java_ThrowStmt";
+    expr: IRExpr;
+    stmtIndex: number;
+}
+export interface Java_NewExpr {
+    kind: "Java_NewExpr";
+    type: IRType;
+    args: IRExpr[];
+}
+export interface Java_LambdaExpr {
+    kind: "Java_LambdaExpr";
+    params: IRParam[];
+    body: IRBlockStmt | IRExpr;
+}
+export interface Java_InstanceofExpr {
+    kind: "Java_InstanceofExpr";
+    expr: IRExpr;
+    type: IRType;
+}
+export interface Java_CastExpr {
+    kind: "Java_CastExpr";
+    type: IRType;
+    expr: IRExpr;
+}
+export interface Java_TernaryExpr {
+    kind: "Java_TernaryExpr";
+    cond: IRExpr;
+    ifTrue: IRExpr;
+    ifFalse: IRExpr;
+}

@@ -1,0 +1,64 @@
+{
+  "Kind": "CompilationUnit",
+  "Decls": [
+    {
+      "Kind": "ClassDecl",
+      "Name": "Hello",
+      "Modifiers": ["public"],
+      "Body": [
+        {
+          "Kind": "MethodDecl",
+          "Name": "main",
+          "Modifiers": ["public", "static"],
+          "ReturnType": {
+            "Kind": "PrimitiveType",
+            "Name": "void"
+          },
+          "Params": [
+            {
+              "Kind": "VarDecl",
+              "Name": "args",
+              "Type": {
+                "Kind": "ArrayType",
+                "ElemType": {
+                  "Kind": "Ident",
+                  "Name": "String"
+                }
+              }
+            }
+          ],
+          "Body": {
+            "Kind": "BlockStmt",
+            "Stmts": [
+              {
+                "Kind": "ExprStmt",
+                "Expr": {
+                  "Kind": "MethodCall",
+                  "Method": {
+                    "Kind": "FieldAccess",
+                    "Expr": {
+                      "Kind": "FieldAccess",
+                      "Expr": {
+                        "Kind": "Ident",
+                        "Name": "System"
+                      },
+                      "Name": "out"
+                    },
+                    "Name": "println"
+                  },
+                  "Args": [
+                    {
+                      "Kind": "Literal",
+                      "Value": "Hello, World!",
+                      "Type": "String"
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

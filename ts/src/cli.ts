@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// Aieattoken CLI — AI-native Go compression tool
-// Compress Go code for minimal LLM token usage, transpile back to Go for compilation
+// Aieattoken CLI — AI-native code compression tool
+// Compress Go/Java code for minimal LLM token usage, transpile back for compilation
 
 import { readFileSync, writeFileSync, watch, existsSync, mkdirSync } from "fs";
 import { resolve, dirname, basename, extname, join } from "path";
@@ -9,8 +9,10 @@ import { fileURLToPath } from "url";
 import { parse } from "./parser/index.js";
 import { transform, loadAliases } from "./transformer/index.js";
 import { emit } from "./emitter/index.js";
+import { emit as emitJava } from "./emitter/java.js";
 import { astDiff, formatDiff } from "./ast-diff/index.js";
 import { parseGoFile, goAstToIR, irToAET, loadReverseAliases } from "./reverse/index.js";
+import { parseJavaFile, javaAstToIR, javaIrToAET, loadJavaReverseAliases } from "./reverse/java.js";
 
 // Resolve paths relative to this package (works for global npm install)
 const __filename = fileURLToPath(import.meta.url);
@@ -24,6 +26,15 @@ function findAliases(): string | undefined {
     resolve(projectRoot, "stdlib-aliases.json"),
     resolve(pkgRoot, "stdlib-aliases.json"),
     resolve(process.cwd(), "stdlib-aliases.json"),
+  ];
+  return candidates.find(p => existsSync(p));
+}
+
+function findJavaAliases(): string | undefined {
+  const candidates = [
+    resolve(projectRoot, "stdlib-aliases-java.json"),
+    resolve(pkgRoot, "stdlib-aliases-java.json"),
+    resolve(process.cwd(), "stdlib-aliases-java.json"),
   ];
   return candidates.find(p => existsSync(p));
 }
@@ -45,27 +56,33 @@ if (aliasPath) {
   loadAliases(aliasPath);
   loadReverseAliases(aliasPath);
 }
+const javaAliasPath = findJavaAliases();
+if (javaAliasPath) {
+  loadJavaReverseAliases(javaAliasPath);
+}
 
 const args = process.argv.slice(2);
 const command = args[0];
 
-const VERSION = "0.1.0";
+const VERSION = "0.2.0";
 
 function usage() {
-  console.log(`aieattoken v${VERSION} — Compress Go code for AI token efficiency
+  console.log(`aieattoken v${VERSION} — Compress Go/Java code for AI token efficiency
 
 Usage:
-  aet convert <file.go>              Go → AET (saves to .aet file)
-  aet convert <file.go> -o <out>     Go → AET (custom output path)
+  aet convert <file.go|.java>        Go/Java → AET (saves to .aet file)
+  aet convert <file> -o <out>        Go/Java → AET (custom output path)
   aet build <file.aet>               AET → Go → compile (produces binary)
   aet build <file.aet> -o <out>      AET → Go → compile (custom binary name)
-  aet stats <file.go>                Show token savings analysis
-  aet watch <dir>                    Watch directory, auto-convert .go → .aet
-  aet compile <file.aet>             AET → Go source (stdout)
-  aet compile <file.aet> -o <out>    AET → Go source (file)
+  aet stats <file.go|.java>          Show token savings analysis
+  aet watch <dir>                    Watch directory, auto-convert .go/.java → .aet
+  aet compile <file.aet>             AET → Go source (stdout, default)
+  aet compile <file.aet> --java      AET → Java source (stdout)
+  aet compile <file.aet> -o <out>    AET → source (file)
   aet diff <f1.aet> <f2.aet>        AST diff between two AET files
 
 Options:
+  --java                             Target Java output (for compile command)
   --version, -v                      Show version
   --help, -h                         Show this help`);
 }
@@ -109,27 +126,38 @@ switch (command) {
 
 function cmdConvert() {
   const file = args[1];
-  if (!file) { console.error("Usage: aet convert <file.go>"); process.exit(1); }
+  if (!file) { console.error("Usage: aet convert <file.go|.java>"); process.exit(1); }
   const absPath = resolve(file);
   if (!existsSync(absPath)) { console.error(`File not found: ${file}`); process.exit(1); }
 
-  const goCode = readFileSync(absPath, "utf-8");
-  const aet = convertGoToAET(absPath, goCode);
+  const ext = extname(absPath).toLowerCase();
+  const sourceCode = readFileSync(absPath, "utf-8");
+  let aet: string | null = null;
+
+  if (ext === ".go") {
+    aet = convertGoToAET(absPath, sourceCode);
+  } else if (ext === ".java") {
+    aet = convertJavaToAET(absPath, sourceCode);
+  } else {
+    console.error(`Unsupported file type: ${ext} (expected .go or .java)`);
+    process.exit(1);
+  }
+
   if (!aet) process.exit(1);
 
   const outIdx = args.indexOf("-o");
   const outPath = outIdx !== -1 && args[outIdx + 1]
     ? resolve(args[outIdx + 1])
-    : absPath.replace(/\.go$/, ".aet");
+    : absPath.replace(/\.(go|java)$/, ".aet");
 
   writeFileSync(outPath, aet);
   console.log(`Converted: ${basename(absPath)} → ${basename(outPath)}`);
 
   // Show token stats
-  const goTokens = countTokensSync(goCode);
+  const srcTokens = countTokensSync(sourceCode);
   const aetTokens = countTokensSync(aet);
-  const savings = ((1 - aetTokens / goTokens) * 100).toFixed(1);
-  console.log(`Tokens: ${goTokens} → ${aetTokens} (${savings}% saved)`);
+  const savings = ((1 - aetTokens / srcTokens) * 100).toFixed(1);
+  console.log(`Tokens: ${srcTokens} → ${aetTokens} (${savings}% saved)`);
 }
 
 function cmdBuild() {
@@ -164,33 +192,40 @@ function cmdBuild() {
 
 function cmdStats() {
   const file = args[1];
-  if (!file) { console.error("Usage: aet stats <file.go>"); process.exit(1); }
+  if (!file) { console.error("Usage: aet stats <file.go|.java>"); process.exit(1); }
   const absPath = resolve(file);
   if (!existsSync(absPath)) { console.error(`File not found: ${file}`); process.exit(1); }
 
-  const goCode = readFileSync(absPath, "utf-8");
-  const goTokens = countTokensSync(goCode);
+  const ext = extname(absPath).toLowerCase();
+  const sourceCode = readFileSync(absPath, "utf-8");
+  const srcTokens = countTokensSync(sourceCode);
 
   // Convert to AET
-  const aet = convertGoToAET(absPath, goCode);
+  let aet: string | null;
+  if (ext === ".java") {
+    aet = convertJavaToAET(absPath, sourceCode);
+  } else {
+    aet = convertGoToAET(absPath, sourceCode);
+  }
   if (!aet) { console.error("Conversion failed"); process.exit(1); }
   const aetTokens = countTokensSync(aet);
 
-  const savings = ((1 - aetTokens / goTokens) * 100).toFixed(1);
-  const saved = goTokens - aetTokens;
+  const lang = ext === ".java" ? "Java" : "Go";
+  const savings = ((1 - aetTokens / srcTokens) * 100).toFixed(1);
+  const saved = srcTokens - aetTokens;
 
   // Display stats
   console.log(`\n  File: ${basename(absPath)}`);
-  console.log(`  Go tokens:  ${goTokens}`);
+  console.log(`  ${lang} tokens:  ${srcTokens}`);
   console.log(`  AET tokens: ${aetTokens}`);
   console.log(`  Saved:      ${saved} tokens (${savings}%)`);
-  console.log(`  Lines:      ${goCode.split("\n").length} Go → 1 AET`);
+  console.log(`  Lines:      ${sourceCode.split("\n").length} ${lang} → 1 AET`);
 
   // Bar visualization
   const barWidth = 40;
-  const goBar = "█".repeat(barWidth);
-  const aetBar = "█".repeat(Math.round(barWidth * aetTokens / goTokens));
-  console.log(`\n  Go:  [${goBar}] ${goTokens}`);
+  const srcBar = "█".repeat(barWidth);
+  const aetBar = "█".repeat(Math.round(barWidth * aetTokens / srcTokens));
+  console.log(`\n  ${lang}:  [${srcBar}] ${srcTokens}`);
   console.log(`  AET: [${aetBar.padEnd(barWidth)}] ${aetTokens}\n`);
 }
 
@@ -234,17 +269,27 @@ function cmdWatch() {
 
 function cmdCompile() {
   const file = args[1];
-  if (!file) { console.error("Usage: aet compile <file.aet>"); process.exit(1); }
+  if (!file) { console.error("Usage: aet compile <file.aet> [--java]"); process.exit(1); }
   const code = readFileSync(resolve(file), "utf-8");
-  const result = compileAET(code);
-  if (result.error) { console.error(result.error); process.exit(1); }
+  const targetJava = args.includes("--java");
+
+  const ir = compileToIR(code);
+  if (ir.error) { console.error(ir.error); process.exit(1); }
+
+  let output: string;
+  if (targetJava) {
+    const className = basename(file, ".aet").replace(/^\w/, c => c.toUpperCase());
+    output = emitJava(ir.ir!, { className });
+  } else {
+    output = emit(ir.ir!);
+  }
 
   const outIdx = args.indexOf("-o");
   if (outIdx !== -1 && args[outIdx + 1]) {
-    writeFileSync(resolve(args[outIdx + 1]), result.go!);
+    writeFileSync(resolve(args[outIdx + 1]), output);
     console.log(`Written to ${args[outIdx + 1]}`);
   } else {
-    process.stdout.write(result.go!);
+    process.stdout.write(output);
   }
 }
 
@@ -271,12 +316,26 @@ function convertGoToAET(goFilePath: string, goCode: string): string | null {
     const ir = goAstToIR(goAst);
     return irToAET(ir);
   } catch (e: any) {
-    // Fallback: if go-parser binary not found, give helpful error
     if (e.message?.includes("Failed to parse")) {
       console.error("Error: Go parser not found. Run 'cd go-parser && go build -o goparser' first.");
-      console.error("  Or install Go and the parser will be built automatically.");
     } else {
-      console.error(`Conversion error: ${e.message}`);
+      console.error(`Go conversion error: ${e.message}`);
+    }
+    return null;
+  }
+}
+
+function convertJavaToAET(javaFilePath: string, javaCode: string): string | null {
+  try {
+    const javaAst = parseJavaFile(javaFilePath);
+    const ir = javaAstToIR(javaAst);
+    return javaIrToAET(ir);
+  } catch (e: any) {
+    if (e.message?.includes("Failed to parse") || e.message?.includes("ASTDumper")) {
+      console.error("Error: Java parser not found. Run 'cd java-parser && javac ASTDumper.java' first.");
+      console.error("  Requires JDK 17+.");
+    } else {
+      console.error(`Java conversion error: ${e.message}`);
     }
     return null;
   }
@@ -286,6 +345,12 @@ function compileAET(code: string): { go?: string; error?: string } {
   const ir = compileToIR(code);
   if (ir.error) return { error: ir.error };
   return { go: emit(ir.ir!) };
+}
+
+function compileAETToJava(code: string, className?: string): { java?: string; error?: string } {
+  const ir = compileToIR(code);
+  if (ir.error) return { error: ir.error };
+  return { java: emitJava(ir.ir!, { className }) };
 }
 
 function compileToIR(code: string): { ir?: ReturnType<typeof transform>; error?: string } {
@@ -301,4 +366,4 @@ function compileToIR(code: string): { ir?: ReturnType<typeof transform>; error?:
 import { countTokens as countTokensSync } from "./utils/tokencount.js";
 
 // Export for programmatic use
-export { compileAET, compileToIR, convertGoToAET };
+export { compileAET, compileAETToJava, compileToIR, convertGoToAET, convertJavaToAET };
