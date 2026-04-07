@@ -1,0 +1,218 @@
+{
+  "timestamp": "2026-04-07T20:22:41.692Z",
+  "results": [
+    {
+      "group": "A Group (RosettaCode)",
+      "name": "Ackermann",
+      "javaTokens": 148,
+      "aetTokens": 103,
+      "saving": "30.4",
+      "status": "PASS"
+    },
+    {
+      "group": "A Group (RosettaCode)",
+      "name": "Binsearch",
+      "javaTokens": 219,
+      "aetTokens": 153,
+      "saving": "30.1",
+      "status": "ERROR"
+    },
+    {
+      "group": "A Group (RosettaCode)",
+      "name": "Bubblesort",
+      "javaTokens": 215,
+      "aetTokens": 142,
+      "saving": "34.0",
+      "status": "ERROR"
+    },
+    {
+      "group": "A Group (RosettaCode)",
+      "name": "Caesar",
+      "javaTokens": 229,
+      "aetTokens": 164,
+      "saving": "28.4",
+      "status": "ERROR"
+    },
+    {
+      "group": "A Group (RosettaCode)",
+      "name": "Doors100",
+      "javaTokens": 116,
+      "aetTokens": 81,
+      "saving": "30.2",
+      "status": "PASS"
+    },
+    {
+      "group": "A Group (RosettaCode)",
+      "name": "Factorial",
+      "javaTokens": 87,
+      "aetTokens": 63,
+      "saving": "27.6",
+      "status": "PASS"
+    },
+    {
+      "group": "A Group (RosettaCode)",
+      "name": "Fizzbuzz",
+      "javaTokens": 112,
+      "aetTokens": 65,
+      "saving": "42.0",
+      "status": "PASS"
+    },
+    {
+      "group": "A Group (RosettaCode)",
+      "name": "Gcd",
+      "javaTokens": 79,
+      "aetTokens": 48,
+      "saving": "39.2",
+      "status": "PASS"
+    },
+    {
+      "group": "A Group (RosettaCode)",
+      "name": "Hanoi",
+      "javaTokens": 161,
+      "aetTokens": 117,
+      "saving": "27.3",
+      "status": "PASS"
+    },
+    {
+      "group": "A Group (RosettaCode)",
+      "name": "Luhn",
+      "javaTokens": 206,
+      "aetTokens": 141,
+      "saving": "31.6",
+      "status": "ERROR"
+    },
+    {
+      "group": "A Group (RosettaCode)",
+      "name": "Matrix",
+      "javaTokens": 272,
+      "aetTokens": 211,
+      "saving": "22.4",
+      "status": "ERROR"
+    },
+    {
+      "group": "A Group (RosettaCode)",
+      "name": "Palindrome",
+      "javaTokens": 131,
+      "aetTokens": 94,
+      "saving": "28.2",
+      "status": "PASS"
+    },
+    {
+      "group": "A Group (RosettaCode)",
+      "name": "Reverse",
+      "javaTokens": 91,
+      "aetTokens": 72,
+      "saving": "20.9",
+      "status": "ERROR"
+    },
+    {
+      "group": "A Group (RosettaCode)",
+      "name": "Roman",
+      "javaTokens": 229,
+      "aetTokens": 178,
+      "saving": "22.3",
+      "status": "ERROR"
+    },
+    {
+      "group": "A Group (RosettaCode)",
+      "name": "Tokenize",
+      "javaTokens": 88,
+      "aetTokens": 62,
+      "saving": "29.5",
+      "status": "PASS"
+    },
+    {
+      "group": "A Group (RosettaCode)",
+      "name": "fibonacci",
+      "javaTokens": 93,
+      "aetTokens": 58,
+      "saving": "37.6",
+      "status": "ERROR"
+    },
+    {
+      "group": "B Group (Real-World)",
+      "name": "b01_maxmin",
+      "javaTokens": 465,
+      "aetTokens": 340,
+      "saving": "26.9",
+      "status": "ERROR"
+    },
+    {
+      "group": "B Group (Real-World)",
+      "name": "b02_wordcount",
+      "javaTokens": 357,
+      "aetTokens": 256,
+      "saving": "28.3",
+      "status": "ERROR"
+    },
+    {
+      "group": "B Group (Real-World)",
+      "name": "b03_stack",
+      "javaTokens": 432,
+      "aetTokens": 297,
+      "saving": "31.3",
+      "status": "ERROR"
+    },
+    {
+      "group": "B Group (Real-World)",
+      "name": "b04_celsius",
+      "javaTokens": 1038,
+      "aetTokens": 641,
+      "saving": "38.2",
+      "status": "ERROR"
+    },
+    {
+      "group": "B Group (Real-World)",
+      "name": "b05_validate",
+      "javaTokens": 1225,
+      "aetTokens": 871,
+      "saving": "28.9",
+      "status": "ERROR"
+    },
+    {
+      "group": "B Group (Real-World)",
+      "name": "b06_kvstore",
+      "javaTokens": 969,
+      "aetTokens": 740,
+      "saving": "23.6",
+      "status": "ERROR"
+    },
+    {
+      "group": "B Group (Real-World)",
+      "name": "b07_jsonlike",
+      "javaTokens": 1320,
+      "aetTokens": 850,
+      "saving": "35.6",
+      "status": "ERROR"
+    },
+    {
+      "group": "B Group (Real-World)",
+      "name": "b08_csv",
+      "javaTokens": 1448,
+      "aetTokens": 1060,
+      "saving": "26.8",
+      "status": "ERROR"
+    },
+    {
+      "group": "B Group (Real-World)",
+      "name": "b09_calculator",
+      "javaTokens": 1812,
+      "aetTokens": 1310,
+      "saving": "27.7",
+      "status": "ERROR"
+    },
+    {
+      "group": "B Group (Real-World)",
+      "name": "b10_linkedlist",
+      "javaTokens": 3098,
+      "aetTokens": 2085,
+      "saving": "32.7",
+      "status": "ERROR"
+    }
+  ],
+  "summary": {
+    "passed": 8,
+    "total": 26,
+    "passingTokenSaving": "31.3"
+  }
+}

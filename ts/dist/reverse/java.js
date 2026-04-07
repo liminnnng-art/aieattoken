@@ -932,6 +932,10 @@ function flattenMethodCallName(node) {
 function convertFieldAccess(node) {
     const obj = convertExpr(node.Expr);
     const fieldName = node.Name || "";
+    // Special: .length field access → len(obj) — avoids AET keyword conflict
+    if (fieldName === "length") {
+        return { kind: "CallExpr", func: { kind: "Ident", name: "len" }, args: [obj] };
+    }
     // Check for reverse alias on field access (e.g., System.out → could be part of println)
     if (obj.kind === "Ident") {
         const fullName = `${obj.name}.${fieldName}`;
