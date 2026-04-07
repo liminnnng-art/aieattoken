@@ -1,0 +1,1 @@
+!v1;readConfig(path:string)->string{data:=rf(path)?;^string(data)};main(){config:=readConfig("config.txt")?;pl(config)}

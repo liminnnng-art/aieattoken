@@ -1,0 +1,1 @@
+!v1;@User{Name:string;Age:int};main(){u:=User{Name:"Alice",Age:30};pl(u.Name)}
