@@ -1,1 +1,1 @@
-!v1;@User{Name:string;Age:int};User.Greet()->(string,error){if u.Age<0{^"",Ef("invalid age")};^sf("Hello, %s! Age: %d",u.Name,u.Age),nil};main(){u:=User{Name:"Alice",Age:30};msg,err:=u.Greet();if err!=nil{pl(err);^};pl(msg)}
+!v3;@User{Name:string;Age:int};User.Greet()->(string,error){if u.Age<0{^"",Ef("invalid age")};^sf("Hello, %s! Age: %d",u.Name,u.Age),nil};main(){u:=User{Name:"Alice",Age:30};msg,err:=u.Greet();if err!=nil{pl(err);^};pl(msg)}

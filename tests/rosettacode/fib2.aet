@@ -1,1 +1,1 @@
-!v1;fibonacci(n:int)->int{if n<=1{^n};^fibonacci(n-1)+fibonacci(n-2)}
+!v3;fibonacci(n:int)->int{if n<=1{^n};^fibonacci(n-1)+fibonacci(n-2)}

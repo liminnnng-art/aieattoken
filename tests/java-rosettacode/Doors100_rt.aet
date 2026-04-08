@@ -1,0 +1,1 @@
+!v3;main(args:[]string){doors:=mk([]bool,101);for pass:=1;pass<=100;pass++{for door:=pass;door<=100;door+=pass{doors[door]=!doors[door]}};for i:=1;i<=100;i++{if (doors[i]){pf("Door %d is open%n",i)}}}

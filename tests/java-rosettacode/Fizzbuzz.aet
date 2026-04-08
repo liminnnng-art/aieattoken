@@ -1,0 +1,1 @@
+!v3;main(args:[]string){for i:=1;i<=100;i++{if (i%15==0){pl("FizzBuzz")}else if (i%3==0){pl("Fizz")}else if (i%5==0){pl("Buzz")}else{pl(i)}}}

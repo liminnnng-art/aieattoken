@@ -1,0 +1,1 @@
+!v2;gcd(a:int,b:int)->int{for (b!=0){temp:=b;b=a%b;a=temp};^a};main(args:[]string){pl(gcd(40902,24140))}

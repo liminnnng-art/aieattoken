@@ -1,1 +1,1 @@
-binarySearch(a,target){lo:=0;hi:=len(a)-1;for lo<=hi{mid:=(lo+hi)/2;switch{case a[mid]==target:^mid;case a[mid]<target:lo=mid+1;default:hi=mid-1}};-1};main(){a:=[]int{1,3,5,7,9,11,13,15};pf("Found 7 at index %d\n",binarySearch(a,7))}
+binarySearch(a,target){lo:=0;hi:=ln(a)-1;for lo<=hi{mid:=(lo+hi)/2;switch{case a[mid]==target:^mid;case a[mid]<target:lo=mid+1;default:hi=mid-1}};-1};main(){a:=[]int{1,3,5,7,9,11,13,15};pf("Found 7 at index %d\n",binarySearch(a,7))}

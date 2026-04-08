@@ -48,9 +48,12 @@ class ImportTracker {
 }
 // ─── Module-level state reset per emit call ────────────────────────────────────
 let imports;
+// Track which variable names are known to be strings (for .length vs .length())
+let stringVarNames = new Set();
 // ─── Public entry point ────────────────────────────────────────────────────────
 export function emit(program, options) {
     imports = new ImportTracker();
+    stringVarNames = new Set();
     const className = options?.className ?? "Main";
     const packageName = options?.packageName;
     // Check whether the program already contains Java_ClassDecl nodes
@@ -151,7 +154,16 @@ function emitAutoMainClass(className, decls, level) {
     lines.push(`${indent(level)}}`);
     return lines.join("\n");
 }
+/** Collect variable names whose type is known to be String. */
+function collectStringVars(node) {
+    for (const p of node.params) {
+        if (p.type && p.type.name === "string") {
+            stringVarNames.add(p.name);
+        }
+    }
+}
 function emitStaticMethod(node, level) {
+    collectStringVars(node);
     // main function gets special signature
     if (node.name === "main") {
         const lines = [];
@@ -674,8 +686,20 @@ export function emitExpr(expr) {
             return emitUnaryExpr(expr);
         case "CallExpr":
             return emitCallExpr(expr);
-        case "SelectorExpr":
-            return `${emitExpr(expr.x)}.${expr.sel}`;
+        case "SelectorExpr": {
+            // Reverse keyword method renames from Java→AET conversion
+            const KEYWORD_UNRENAMES = {
+                "apd": "append",
+                "del": "delete",
+                "cpy_": "copy",
+                "nw_": "new",
+                "mk_": "make",
+                "flt_": "filter",
+                "rng_": "range",
+            };
+            const sel = KEYWORD_UNRENAMES[expr.sel] ?? expr.sel;
+            return `${emitExpr(expr.x)}.${sel}`;
+        }
         case "IndexExpr":
             return `${emitExpr(expr.x)}[${emitExpr(expr.index)}]`;
         case "SliceExpr":
@@ -771,9 +795,22 @@ function emitCompositeLit(expr) {
     }
     // Array/slice literal
     if (typeExpr.kind === "ArrayTypeExpr") {
-        const eltType = mapIRTypeToJava(emitExpr(typeExpr.elt));
+        let eltType = mapIRTypeToJava(emitExpr(typeExpr.elt));
         const elts = expr.elts.map(emitExpr).join(", ");
-        return `new ${eltType}[]{${elts}}`;
+        // If element type is Object (from _in), emit bare initializer {elts}
+        // This works when nested inside another array initializer
+        if (eltType === "Object") {
+            return `{${elts}}`;
+        }
+        // Handle nested array types (e.g., []int → int[])
+        // eltType might be "[]int" which needs to become "int[]"
+        let extraDims = "";
+        while (eltType.startsWith("[]")) {
+            eltType = eltType.substring(2);
+            extraDims += "[]";
+        }
+        eltType = mapIRTypeToJava(eltType);
+        return `new ${eltType}${extraDims}[]{${elts}}`;
     }
     // Struct literal → new Constructor(args)
     if (typeExpr.kind === "Ident") {
@@ -834,15 +871,23 @@ function emitCallExpr(expr) {
             return `${alias.java}(${args})`;
         }
     }
-    // Go built-in functions → Java equivalents
+    // Go built-in functions → Java equivalents (accept both v3 and legacy names)
     if (expr.func.kind === "Ident") {
         switch (expr.func.name) {
+            case "_t":
+                // Ternary: _t(cond, ifTrue, ifFalse) → cond ? ifTrue : ifFalse
+                if (expr.args.length === 3) {
+                    return `${emitExpr(expr.args[0])} ? ${emitExpr(expr.args[1])} : ${emitExpr(expr.args[2])}`;
+                }
+                break;
+            case "ln":
             case "len":
                 return emitLenCall(expr.args);
+            case "cp":
             case "cap":
                 return emitCapCall(expr.args);
+            case "apl":
             case "append": {
-                // append(slice, elems...) → handled via ArrayList or Arrays.copyOf
                 if (expr.args.length >= 2) {
                     const slice = emitExpr(expr.args[0]);
                     const newElts = expr.args.slice(1).map(emitExpr).join(", ");
@@ -850,8 +895,10 @@ function emitCallExpr(expr) {
                 }
                 return `/* append */`;
             }
+            case "mk":
             case "make":
                 return emitMakeCall(expr.args);
+            case "nw":
             case "new": {
                 if (expr.args.length === 1) {
                     const typeArg = emitExpr(expr.args[0]);
@@ -859,6 +906,7 @@ function emitCallExpr(expr) {
                 }
                 break;
             }
+            case "dx":
             case "delete": {
                 if (expr.args.length === 2) {
                     return `${emitExpr(expr.args[0])}.remove(${emitExpr(expr.args[1])})`;
@@ -903,6 +951,11 @@ function emitCallExpr(expr) {
                     return `(byte) ${emitExpr(expr.args[0])}`;
                 }
                 break;
+            case "rune":
+                if (expr.args.length === 1) {
+                    return `(char) ${emitExpr(expr.args[0])}`;
+                }
+                break;
         }
     }
     // fmt.Sprintf → String.format
@@ -922,11 +975,15 @@ function emitCallExpr(expr) {
 function emitLenCall(args) {
     if (args.length !== 1)
         return `/* len() */`;
-    const arg = emitExpr(args[0]);
-    // Strings and collections use .length() or .size(); arrays use .length
-    // Use .length() which works for String; arrays use .length but that's a minor compat issue
-    // For safety, use .length() which works for String (most common case from Java reverse)
-    return `${arg}.length()`;
+    const argExpr = args[0];
+    const arg = emitExpr(argExpr);
+    // Strings use .length() method; arrays use .length field; collections use .size()
+    // Check if the argument is a known string variable
+    if (argExpr.kind === "Ident" && stringVarNames.has(argExpr.name)) {
+        return `${arg}.length()`;
+    }
+    // Default: use .length (works for arrays, which are the most common case)
+    return `${arg}.length`;
 }
 function emitCapCall(args) {
     if (args.length !== 1)
@@ -945,14 +1002,31 @@ function emitMakeCall(args) {
         return `new HashMap<${boxType(k)}, ${boxType(v)}>()`;
     }
     if (typeArg.kind === "ArrayTypeExpr") {
-        const elt = emitExpr(typeArg.elt);
-        const javaElt = mapIRTypeToJava(elt);
-        const sizeExpr = args.length > 1 ? emitExpr(args[1]) : "0";
-        // Primitive arrays use new Type[size], object arrays use new Type[size]
-        if (isPrimitiveType(javaElt)) {
-            return `new ${javaElt}[${sizeExpr}]`;
+        let elt = emitExpr(typeArg.elt);
+        // Handle nested array types: mk([][]int, n, m) → new int[n][m]
+        // The elt might be "[]int" (flat string) or "int[]" (Java format)
+        let extraDims = 0;
+        while (elt.startsWith("[]")) {
+            elt = elt.substring(2);
+            extraDims++;
         }
-        return `new ${javaElt}[${sizeExpr}]`;
+        let javaElt = mapIRTypeToJava(elt);
+        while (javaElt.endsWith("[]")) {
+            javaElt = javaElt.slice(0, -2);
+            extraDims++;
+        }
+        // Build dimensions: first dim uses args[1], subsequent dims use args[2], args[3]...
+        let dimStr = "";
+        for (let d = 0; d <= extraDims; d++) {
+            const sizeIdx = d + 1;
+            if (sizeIdx < args.length) {
+                dimStr += `[${emitExpr(args[sizeIdx])}]`;
+            }
+            else {
+                dimStr += "[]";
+            }
+        }
+        return `new ${javaElt}${dimStr}`;
     }
     if (typeArg.kind === "ChanTypeExpr") {
         throw new Error("Go-specific construct ChanTypeExpr (channels) not supported for Java target");
@@ -1050,6 +1124,20 @@ function mapStdlibCall(pkg, method, args) {
                     return `System.getenv(${argStr})`;
             }
             break;
+        case "Arrays":
+            imports.add("java.util.Arrays");
+            return `Arrays.${method}(${argStr})`;
+        case "Collections":
+            imports.add("java.util.Collections");
+            return `Collections.${method}(${argStr})`;
+        case "Character":
+            // Character methods are in java.lang, no import needed
+            return `Character.${method}(${argStr})`;
+        case "Integer":
+            return `Integer.${method}(${argStr})`;
+        case "Map":
+            imports.add("java.util.Map");
+            return `Map.${method}(${argStr})`;
         case "sort":
             switch (method) {
                 case "Ints": {
@@ -1219,6 +1307,7 @@ function mapType(irType) {
         case "rune": return "char";
         case "error": return "Exception";
         case "interface{}": return "Object";
+        case "_in": return "Object";
         case "any": return "Object";
         case "void": return "void";
     }
@@ -1231,8 +1320,8 @@ function mapType(irType) {
         const elt = name.substring(2);
         return `${mapType({ name: elt })}[]`;
     }
-    // Map prefix in name: map[K]V
-    const mapMatch = name.match(/^map\[(.+?)\](.+)$/);
+    // Map prefix in name: map[K]V or mp[K]V
+    const mapMatch = name.match(/^(?:map|mp)\[(.+?)\](.+)$/);
     if (mapMatch) {
         imports.add("java.util.Map");
         const k = mapType({ name: mapMatch[1] });
@@ -1286,6 +1375,7 @@ function mapIRTypeToJava(irType) {
         case "float64": return "double";
         case "float32": return "float";
         case "interface{}": return "Object";
+        case "_in": return "Object";
         case "error": return "Exception";
         default: return irType;
     }

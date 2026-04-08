@@ -1,0 +1,1 @@
+!v2;isPalindrome(s:string)->bool{left:=0;right:=len(s)-1;for ((left<right)){if (s.charAt(left)!=s.charAt(right)){^false};left++;right--};^true};main(args:[]string){tests:=[]string{"racecar","hello","madam","world","level"};for _,s:=range tests{pf("%s: %b%n",s,isPalindrome(s))}}

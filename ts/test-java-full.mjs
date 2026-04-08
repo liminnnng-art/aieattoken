@@ -54,7 +54,9 @@ async function runTestGroup(groupName, testDir, tests) {
     const javaFile = resolve(testDir, `${name}.java`);
     const aetFile = resolve(testDir, `${name}.aet`);
     const genDir = resolve(testDir, "gen");
-    const genJavaFile = resolve(genDir, `${name}.java`);
+    // Class name is capitalised by the CLI; the .java file must match the class name
+    const className = name.replace(/^\w/, c => c.toUpperCase());
+    const genJavaFile = resolve(genDir, `${className}.java`);
 
     const result = { name, javaTokens: 0, aetTokens: 0, saving: "0", status: "ERROR",
       correctness: false, roundTrip: false, transpileMs: 0 };
@@ -82,7 +84,7 @@ async function runTestGroup(groupName, testDir, tests) {
 
       // Step 4: Compile & run generated Java
       run(`javac "${genJavaFile}"`, { cwd: genDir });
-      const genOutput = run(`java ${name}`, { cwd: genDir });
+      const genOutput = run(`java ${className}`, { cwd: genDir });
 
       // Step 5: Correctness check
       result.correctness = origOutput === genOutput;

@@ -8,9 +8,9 @@ import * as IR from "../ir.js";
 // ---------------------------------------------------------------------------
 // Reverse alias map: "System.out.println" → "pl"
 // ---------------------------------------------------------------------------
-let javaReverseAliasMap = {};
+let javaReverseAliasMap = Object.create(null);
 // Track which aliases are constructors: "new StringBuilder" → "Sb"
-let javaConstructorAliases = {};
+let javaConstructorAliases = Object.create(null);
 export function loadJavaReverseAliases(path) {
     try {
         const p = path || resolve(process.cwd(), "..", "stdlib-aliases-java.json");
@@ -102,21 +102,21 @@ const JAVA_TYPE_MAP = {
     short: "int16",
     char: "rune",
     String: "string",
-    Object: "interface{}",
+    Object: "_in",
     Exception: "error",
     RuntimeException: "error",
     Throwable: "error",
 };
 function mapJavaType(node) {
     if (!node)
-        return IR.simpleType("interface{}");
+        return IR.simpleType("_in");
     switch (node.Kind) {
         case "PrimitiveType": {
             const mapped = JAVA_TYPE_MAP[node.Name] ?? node.Name;
             return IR.simpleType(mapped);
         }
         case "Ident": {
-            const name = node.Name || "interface{}";
+            const name = node.Name || "_in";
             const mapped = JAVA_TYPE_MAP[name] ?? name;
             return IR.simpleType(mapped);
         }
@@ -128,20 +128,20 @@ function mapJavaType(node) {
             const baseName = typeNodeName(node.Type);
             const typeArgs = node.TypeArgs || [];
             if (baseName === "List" || baseName === "ArrayList" || baseName === "LinkedList") {
-                const elem = typeArgs.length > 0 ? mapJavaType(typeArgs[0]) : IR.simpleType("interface{}");
+                const elem = typeArgs.length > 0 ? mapJavaType(typeArgs[0]) : IR.simpleType("_in");
                 return IR.sliceType(elem);
             }
             if (baseName === "Map" || baseName === "HashMap" || baseName === "TreeMap" || baseName === "LinkedHashMap") {
                 const k = typeArgs.length > 0 ? mapJavaType(typeArgs[0]) : IR.simpleType("string");
-                const v = typeArgs.length > 1 ? mapJavaType(typeArgs[1]) : IR.simpleType("interface{}");
+                const v = typeArgs.length > 1 ? mapJavaType(typeArgs[1]) : IR.simpleType("_in");
                 return IR.mapType(k, v);
             }
             if (baseName === "Set" || baseName === "HashSet" || baseName === "TreeSet") {
-                const elem = typeArgs.length > 0 ? mapJavaType(typeArgs[0]) : IR.simpleType("interface{}");
+                const elem = typeArgs.length > 0 ? mapJavaType(typeArgs[0]) : IR.simpleType("_in");
                 return IR.mapType(elem, IR.simpleType("bool"));
             }
             if (baseName === "Optional") {
-                const elem = typeArgs.length > 0 ? mapJavaType(typeArgs[0]) : IR.simpleType("interface{}");
+                const elem = typeArgs.length > 0 ? mapJavaType(typeArgs[0]) : IR.simpleType("_in");
                 return IR.pointerType(elem);
             }
             return IR.simpleType(baseName);
@@ -157,18 +157,18 @@ function mapJavaType(node) {
 /** Extract a simple name string from a type AST node. */
 function typeNodeName(node) {
     if (!node)
-        return "interface{}";
+        return "_in";
     if (typeof node === "string")
         return node;
     if (node.Kind === "Ident")
-        return node.Name || "interface{}";
+        return node.Name || "_in";
     if (node.Kind === "PrimitiveType")
         return JAVA_TYPE_MAP[node.Name] ?? node.Name;
     if (node.Kind === "FieldAccess")
         return `${typeNodeName(node.Expr)}.${node.Name}`;
     if (node.Kind === "ParameterizedType")
         return typeNodeName(node.Type);
-    return node.Name || "interface{}";
+    return node.Name || "_in";
 }
 // ---------------------------------------------------------------------------
 // javaAstToIR — main entry point: Java JSON AST → IR
@@ -549,7 +549,7 @@ function convertLocalVarDecl(node) {
             value.type = { kind: "ArrayTypeExpr", elt: { kind: "Ident", name: declElemType.name } };
         }
         // Patch make() call type
-        if (value && value.kind === "CallExpr" && value.func.kind === "Ident" && value.func.name === "make") {
+        if (value && value.kind === "CallExpr" && value.func.kind === "Ident" && value.func.name === "mk") {
             const makeArgs = value.args;
             if (makeArgs.length > 0 && makeArgs[0].kind === "ArrayTypeExpr") {
                 makeArgs[0].elt = { kind: "Ident", name: declElemType.name };
@@ -902,13 +902,30 @@ function convertMethodCall(node) {
     }
     // Special: .length() → len(obj) — avoids AET parser keyword conflict
     if (method?.Kind === "FieldAccess" && method.Name === "length" && args.length === 0) {
-        return { kind: "CallExpr", func: { kind: "Ident", name: "len" }, args: [convertExpr(method.Expr)] };
+        return { kind: "CallExpr", func: { kind: "Ident", name: "ln" }, args: [convertExpr(method.Expr)] };
     }
     // Special: .charAt(i) → obj[i] (index expression, not a call)
     // Note: We return a CallExpr here but the emitter should handle the conversion
     if (method?.Kind === "FieldAccess" && method.Name === "charAt" && args.length === 1) {
         // Return as index expression instead
         return { kind: "CallExpr", func: convertExpr(method), args };
+    }
+    // Rename method names that clash with AET parser keywords
+    if (method?.Kind === "FieldAccess") {
+        const KEYWORD_METHOD_RENAMES = {
+            "append": "apd",
+            "delete": "del",
+            "copy": "cpy",
+            "new": "nw_",
+            "make": "mk_",
+            "filter": "flt_",
+            "range": "rng_",
+        };
+        const renamed = KEYWORD_METHOD_RENAMES[method.Name];
+        if (renamed) {
+            const obj = convertExpr(method.Expr);
+            return { kind: "CallExpr", func: { kind: "SelectorExpr", x: obj, sel: renamed }, args };
+        }
     }
     return { kind: "CallExpr", func: convertExpr(method), args };
 }
@@ -934,7 +951,7 @@ function convertFieldAccess(node) {
     const fieldName = node.Name || "";
     // Special: .length field access → len(obj) — avoids AET keyword conflict
     if (fieldName === "length") {
-        return { kind: "CallExpr", func: { kind: "Ident", name: "len" }, args: [obj] };
+        return { kind: "CallExpr", func: { kind: "Ident", name: "ln" }, args: [obj] };
     }
     // Check for reverse alias on field access (e.g., System.out → could be part of println)
     if (obj.kind === "Ident") {
@@ -956,10 +973,10 @@ function convertNewExpr(node) {
     }
     // Common Java types that map to Go builtins
     if (typeName === "ArrayList" || typeName === "LinkedList") {
-        return { kind: "CallExpr", func: { kind: "Ident", name: "make" }, args: [{ kind: "ArrayTypeExpr", elt: { kind: "Ident", name: "interface{}" } }] };
+        return { kind: "CallExpr", func: { kind: "Ident", name: "mk" }, args: [{ kind: "ArrayTypeExpr", elt: { kind: "Ident", name: "_in" } }] };
     }
     if (typeName === "HashMap" || typeName === "TreeMap" || typeName === "LinkedHashMap") {
-        return { kind: "CallExpr", func: { kind: "Ident", name: "make" }, args: [{ kind: "MapTypeExpr", key: { kind: "Ident", name: "string" }, value: { kind: "Ident", name: "interface{}" } }] };
+        return { kind: "CallExpr", func: { kind: "Ident", name: "mk" }, args: [{ kind: "MapTypeExpr", key: { kind: "Ident", name: "string" }, value: { kind: "Ident", name: "_in" } }] };
     }
     // General new expression → Java_NewExpr
     return {
@@ -969,7 +986,7 @@ function convertNewExpr(node) {
     };
 }
 function convertNewArrayExpr(node) {
-    const elemType = node.Type ? mapJavaType(node.Type) : IR.simpleType("interface{}");
+    const elemType = node.Type ? mapJavaType(node.Type) : IR.simpleType("_in");
     // Array with initializer → composite literal
     if (node.Init && node.Init.length > 0) {
         return {
@@ -978,24 +995,36 @@ function convertNewArrayExpr(node) {
             elts: node.Init.map(convertExpr),
         };
     }
-    // Array with dimensions → make([]Type, size)
+    // Array with dimensions → make([]Type, size) or make([][]Type, size1, size2)
     const dims = node.Dimensions || [];
-    const sizeExpr = dims.length > 0
-        ? convertExpr(dims[0])
-        : { kind: "BasicLit", type: "INT", value: "0" };
+    // Build the array type expression with correct nesting for multi-dimensional arrays
+    let innerType = { kind: "Ident", name: elemType.name };
+    for (let i = 1; i < dims.length; i++) {
+        innerType = { kind: "ArrayTypeExpr", elt: innerType };
+    }
+    const mkArgs = [
+        { kind: "ArrayTypeExpr", elt: innerType },
+    ];
+    // Add all dimension sizes
+    for (const dim of dims) {
+        if (dim) {
+            mkArgs.push(convertExpr(dim));
+        }
+    }
+    // If no dimensions provided, add a default size of 0
+    if (mkArgs.length === 1) {
+        mkArgs.push({ kind: "BasicLit", type: "INT", value: "0" });
+    }
     return {
         kind: "CallExpr",
-        func: { kind: "Ident", name: "make" },
-        args: [
-            { kind: "ArrayTypeExpr", elt: { kind: "Ident", name: elemType.name } },
-            sizeExpr,
-        ],
+        func: { kind: "Ident", name: "mk" },
+        args: mkArgs,
     };
 }
 function convertLambdaExpr(node) {
     const params = (node.Params || []).map((p) => ({
         name: p.Name || "_",
-        type: p.Type ? mapJavaType(p.Type) : IR.simpleType("interface{}"),
+        type: p.Type ? mapJavaType(p.Type) : IR.simpleType("_in"),
     }));
     const bodyKind = node.BodyKind || "EXPRESSION";
     if (bodyKind === "EXPRESSION") {
@@ -1031,7 +1060,7 @@ function convertMethodRef(node) {
 // javaIrToAET — convert IR to AET string
 // ---------------------------------------------------------------------------
 export function javaIrToAET(program) {
-    const parts = ["!v2"];
+    const parts = ["!v3"];
     for (const decl of program.decls) {
         parts.push(javaNodeToAET(decl));
     }
@@ -1045,7 +1074,7 @@ function javaNodeToAET(node) {
                 s += `${node.receiver.type.name}.`;
             }
             s += `${node.name}(${node.params.map(p => {
-                if (p.type.name === "interface{}")
+                if (p.type.name === "_in")
                     return p.name;
                 return `${p.name}:${p.type.name}`;
             }).join(",")})`;
@@ -1098,7 +1127,7 @@ function javaNodeToAET(node) {
         }
         case "RangeStmt": {
             const vars = [node.key || "_", node.value].filter(Boolean).join(",");
-            return `for ${vars}:=range ${javaExprToAET(node.x)}{${javaBlockToAET(node.body)}}`;
+            return `for ${vars}:=rng ${javaExprToAET(node.x)}{${javaBlockToAET(node.body)}}`;
         }
         case "SwitchStmt": {
             const tag = node.tag ? ` ${javaExprToAET(node.tag)}` : "";
@@ -1186,10 +1215,11 @@ function javaNodeToAET(node) {
             return s;
         }
         case "Java_EnhancedFor": {
-            return `for _,${node.varName}:=range ${javaExprToAET(node.iterable)}{${javaBlockToAET(node.body)}}`;
+            return `for _,${node.varName}:=rng ${javaExprToAET(node.iterable)}{${javaBlockToAET(node.body)}}`;
         }
         case "Java_ThrowStmt":
-            return `throw ${javaExprToAET(node.expr)}`;
+            // Emit as panic(expr) since AET parser doesn't have throw keyword
+            return `panic(${javaExprToAET(node.expr)})`;
         default:
             return `/* ${node.kind} */`;
     }
@@ -1230,7 +1260,7 @@ function javaExprToAET(expr) {
         case "TypeAssertExpr":
             return `${javaExprToAET(expr.x)}.(${expr.type.name})`;
         case "MapTypeExpr":
-            return `map[${javaExprToAET(expr.key)}]${javaExprToAET(expr.value)}`;
+            return `mp[${javaExprToAET(expr.key)}]${javaExprToAET(expr.value)}`;
         case "ArrayTypeExpr":
             return `[]${javaExprToAET(expr.elt)}`;
         case "ErrorPropExpr":
@@ -1257,8 +1287,8 @@ function javaExprToAET(expr) {
             // (Type)expr → Type(expr)  (type conversion syntax)
             return `${expr.type.name}(${javaExprToAET(expr.expr)})`;
         case "Java_TernaryExpr":
-            // cond ? a : b → if-else expression (AET doesn't have ternary; emit inline)
-            return `if(${javaExprToAET(expr.cond)},${javaExprToAET(expr.ifTrue)},${javaExprToAET(expr.ifFalse)})`;
+            // cond ? a : b → _t(cond, ifTrue, ifFalse) — parsed as regular call, emitter converts to ternary
+            return `_t(${javaExprToAET(expr.cond)},${javaExprToAET(expr.ifTrue)},${javaExprToAET(expr.ifFalse)})`;
         default:
             return "_";
     }

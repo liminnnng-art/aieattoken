@@ -1,0 +1,1 @@
+!v3;reverse(s:string)->string{^Sb(s).reverse().function toString() { [native code] }()};main(args:[]string){testStrings:=[]string{"Hello, World!","racecar"};for _,s:=rng testStrings{reversed:=reverse(s);pf(""%s" -> "%s"%n",s,reversed)}}

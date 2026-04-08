@@ -1,0 +1,1 @@
+!v3;binarySearch(arr:[]int,target:int)->int{lo:=0;hi:=ln(arr)-1;for ((lo<=hi)){mid:=lo+(hi-lo)/2;if (arr[mid]==target){^mid}else if (arr[mid]<target){lo=mid+1}else{hi=mid-1}};^-1};main(args:[]string){sorted:=[]int{1,3,5,7,9,11,13};targets:=[]int{7,8};for _,t:=rng targets{idx:=binarySearch(sorted,t);if (idx>=0){pf("%d found at index %d%n",t,idx)}else{pf("%d not found%n",t)}}}
