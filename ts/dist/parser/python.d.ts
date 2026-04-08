@@ -185,8 +185,10 @@ export declare class AETPythonParser extends CstParser {
     private awaitExpr;
     private primaryExpr;
     private trailer;
+    private attrName;
     private callArgs;
     private callArg;
+    private keywordArgName;
     private subscriptList;
     private subscript;
     private atom;
@@ -208,6 +210,7 @@ export declare class AETPythonParser extends CstParser {
     private isLambdaExpr;
     private isSliceExpr;
     private isKeywordArg;
+    private isIdentLikeToken;
     private isGenExprInCall;
     private isCallableType;
 }

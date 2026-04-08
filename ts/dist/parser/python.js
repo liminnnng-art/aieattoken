@@ -330,7 +330,7 @@ export class AETPythonParser extends CstParser {
             { ALT: () => this.SUBRULE2(this.funcDef) },
         ]);
     });
-    // decoratorExpr: IDENT ('.' IDENT)* ('(' argList ')')?
+    // decoratorExpr: IDENT ('.' IDENT)* ('(' callArgs ')')?
     decoratorExpr = this.RULE("decoratorExpr", () => {
         this.CONSUME(Ident);
         this.MANY(() => {
@@ -339,18 +339,18 @@ export class AETPythonParser extends CstParser {
         });
         this.OPTION(() => {
             this.CONSUME(LParen);
-            this.OPTION2(() => this.SUBRULE(this.argList));
+            this.OPTION2(() => this.SUBRULE(this.callArgs));
             this.CONSUME(RParen);
         });
     });
     // ─────────────── Class Declaration ───────────────
-    // classDecl: 'class' IDENT ('(' argList ')')? '{' classBody '}'
+    // classDecl: 'class' IDENT ('(' callArgs ')')? '{' classBody '}'
     classDecl = this.RULE("classDecl", () => {
         this.CONSUME(Class);
         this.CONSUME(Ident);
         this.OPTION(() => {
             this.CONSUME(LParen);
-            this.OPTION2(() => this.SUBRULE(this.argList));
+            this.OPTION2(() => this.SUBRULE(this.callArgs));
             this.CONSUME(RParen);
         });
         this.CONSUME(LBrace);
@@ -364,7 +364,7 @@ export class AETPythonParser extends CstParser {
             this.OPTION(() => this.CONSUME(Semi));
         });
     });
-    // classMember: decoratedDef | classDecl | slotsDecl | funcDef | assignOrExprStmt
+    // classMember: decoratedDef | classDecl | slotsDecl | asyncStmt | funcDef | assignOrExprStmt
     classMember = this.RULE("classMember", () => {
         this.OR([
             { GATE: () => this.LA(1).tokenType === At,
@@ -372,6 +372,9 @@ export class AETPythonParser extends CstParser {
             { ALT: () => this.SUBRULE(this.classDecl) },
             { GATE: () => this.isSlotsDecl(),
                 ALT: () => this.SUBRULE(this.slotsDecl) },
+            // Async methods: async funcDef, async for, async with
+            { GATE: () => this.LA(1).tokenType === Async,
+                ALT: () => this.SUBRULE(this.asyncStmt) },
             { GATE: () => this.isFuncDef(),
                 ALT: () => this.SUBRULE(this.funcDef) },
             { ALT: () => this.SUBRULE(this.assignOrExprStmt) },
@@ -1174,7 +1177,9 @@ export class AETPythonParser extends CstParser {
                     this.CONSUME3(Ident);
                     this.OPTION2(() => {
                         this.CONSUME(Assign);
-                        this.SUBRULE(this.expr);
+                        // Use xorBitExpr (not full expr) to avoid consuming '|' which
+                        // would clash with the lambda closing delimiter
+                        this.SUBRULE(this.xorBitExpr);
                     });
                 } },
         ]);
@@ -1366,11 +1371,20 @@ export class AETPythonParser extends CstParser {
                     this.SUBRULE(this.subscriptList);
                     this.CONSUME(RBrack);
                 } },
-            // Dot access: '.' IDENT
+            // Dot access: '.' attrName (attrName allows keywords like 'match')
             { ALT: () => {
                     this.CONSUME(Dot);
-                    this.CONSUME(Ident);
+                    this.SUBRULE(this.attrName);
                 } },
+        ]);
+    });
+    // attrName: Ident or soft-keywords that can appear as attribute names after '.'
+    attrName = this.RULE("attrName", () => {
+        this.OR([
+            { ALT: () => this.CONSUME(Ident) },
+            { ALT: () => this.CONSUME(Match) },
+            { ALT: () => this.CONSUME(Case) },
+            { ALT: () => this.CONSUME(Slots) },
         ]);
     });
     // callArgs: callArg (',' callArg)* ','?
@@ -1412,16 +1426,25 @@ export class AETPythonParser extends CstParser {
                     this.SUBRULE2(this.expr);
                 }
             },
-            // keyword=value (GATE: Ident followed by =)
+            // keyword=value (GATE: identLike followed by =)
             { GATE: () => this.isKeywordArg(),
                 ALT: () => {
-                    this.CONSUME(Ident);
+                    this.SUBRULE(this.keywordArgName);
                     this.CONSUME(Assign);
                     this.SUBRULE3(this.expr);
                 }
             },
             // Positional argument
             { ALT: () => this.SUBRULE4(this.expr) },
+        ]);
+    });
+    // keywordArgName: Ident or keyword tokens that can be used as keyword argument names
+    keywordArgName = this.RULE("keywordArgName", () => {
+        this.OR([
+            { ALT: () => this.CONSUME(Ident) },
+            { ALT: () => this.CONSUME(Slots) },
+            { ALT: () => this.CONSUME(Match) },
+            { ALT: () => this.CONSUME(Case) },
         ]);
     });
     // subscriptList: subscript (',' subscript)* ','?
@@ -1775,7 +1798,13 @@ export class AETPythonParser extends CstParser {
         const t1 = this.LA(1);
         const t2 = this.LA(2);
         return t1 !== undefined && t2 !== undefined &&
-            t1.tokenType === Ident && t2.tokenType === Assign;
+            this.isIdentLikeToken(t1) && t2.tokenType === Assign;
+    }
+    // Check if a token is identifier-like (Ident or keywords that can appear as keyword arg names)
+    isIdentLikeToken(t) {
+        const tt = t.tokenType;
+        return tt === Ident || tt === Slots || tt === Match || tt === Case ||
+            tt === PyTrue || tt === PyFalse || tt === PyNone;
     }
     // Check if this is a generator expression in a call: expr compFor
     // Needs to find 'for' at depth 0 before ')' and after an expr

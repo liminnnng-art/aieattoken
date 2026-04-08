@@ -1719,8 +1719,9 @@ function emitFString(fstr) {
         }
         else {
             let exprStr = pyExprToAETP(part.expr);
-            // If the expression itself contains quotes, we need careful handling
-            // but for most cases, simple embedding works
+            // If the expression contains double quotes, swap them to single quotes
+            // so they don't clash with the outer f"..." delimiters
+            exprStr = swapQuotesForFString(exprStr);
             let formatted = `{${exprStr}`;
             if (part.conversion) {
                 formatted += `!${part.conversion}`;
@@ -1733,4 +1734,16 @@ function emitFString(fstr) {
         }
     }
     return `f"${inner}"`;
+}
+/** Swap double-quoted strings to single-quoted inside f-string expressions
+ *  to avoid conflicting with the outer f"..." delimiters. */
+function swapQuotesForFString(s) {
+    if (!s.includes('"'))
+        return s;
+    // Replace "..." string literals with '...' equivalents
+    return s.replace(/"(?:[^"\\]|\\.)*"/g, (match) => {
+        // Convert "content" to 'content'
+        const content = match.slice(1, -1);
+        return `'${content}'`;
+    });
 }
