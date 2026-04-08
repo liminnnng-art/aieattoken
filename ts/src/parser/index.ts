@@ -6,7 +6,7 @@ import { createToken, Lexer, CstParser, IToken, tokenMatcher } from "chevrotain"
 // ============= TOKENS =============
 
 // Version marker
-export const VersionMarker = createToken({ name: "VersionMarker", pattern: /!v[0-9]+/ });
+export const VersionMarker = createToken({ name: "VersionMarker", pattern: /!(?:v[0-9]+|go-v[0-9]+)/ });
 
 // Keywords (all single cl100k_base tokens)
 export const If = createToken({ name: "If", pattern: /if/, longer_alt: undefined });
@@ -48,6 +48,9 @@ export const Question = createToken({ name: "Question", pattern: /\?/ }); // err
 export const QuestionBang = createToken({ name: "QuestionBang", pattern: /\?!/ });
 // Pipe and BitOr share '|' — use single token, disambiguate in parser
 export const Pipe = createToken({ name: "Pipe", pattern: /\|/ });
+
+// Hash: # prefix for len() operator
+export const Hash = createToken({ name: "Hash", pattern: /#/ });
 
 // Pipe operations (treated as keywords when following |)
 export const Filter = createToken({ name: "Filter", pattern: /filter/ });
@@ -114,6 +117,30 @@ export const OctLit = createToken({ name: "OctLit", pattern: /0[oO][0-7]+/ });
 export const BinLit = createToken({ name: "BinLit", pattern: /0[bB][01]+/ });
 export const IntLit = createToken({ name: "IntLit", pattern: /[0-9]+/ });
 
+// v1 backward-compatible abbreviated keywords
+export const Mk = createToken({ name: "Mk", pattern: /mk/, longer_alt: undefined });
+export const Apl = createToken({ name: "Apl", pattern: /apl/, longer_alt: undefined });
+export const Ln = createToken({ name: "Ln", pattern: /ln/, longer_alt: undefined });
+export const Rng = createToken({ name: "Rng", pattern: /rng/, longer_alt: undefined });
+export const Mp = createToken({ name: "Mp", pattern: /mp/, longer_alt: undefined });
+export const Flt = createToken({ name: "Flt", pattern: /flt/, longer_alt: undefined });
+export const Ty = createToken({ name: "Ty", pattern: /ty/, longer_alt: undefined });
+export const Fn = createToken({ name: "Fn", pattern: /fn/, longer_alt: undefined });
+export const Nw = createToken({ name: "Nw", pattern: /nw/, longer_alt: undefined });
+export const Cp = createToken({ name: "Cp", pattern: /cp/, longer_alt: undefined });
+export const Dx = createToken({ name: "Dx", pattern: /dx/, longer_alt: undefined });
+export const Cpy = createToken({ name: "Cpy", pattern: /cpy/, longer_alt: undefined });
+export const Ft = createToken({ name: "Ft", pattern: /ft/, longer_alt: undefined });
+
+// Numeric type keywords (f64, i64, etc.)
+export const F64 = createToken({ name: "F64", pattern: /f64/, longer_alt: undefined });
+export const I64 = createToken({ name: "I64", pattern: /i64/, longer_alt: undefined });
+export const F32 = createToken({ name: "F32", pattern: /f32/, longer_alt: undefined });
+export const I32 = createToken({ name: "I32", pattern: /i32/, longer_alt: undefined });
+export const I16 = createToken({ name: "I16", pattern: /i16/, longer_alt: undefined });
+export const I8 = createToken({ name: "I8", pattern: /i8/, longer_alt: undefined });
+export const U64 = createToken({ name: "U64", pattern: /u64/, longer_alt: undefined });
+
 // Identifier (must come AFTER all keywords)
 export const Ident = createToken({ name: "Ident", pattern: /[a-zA-Z_][a-zA-Z0-9_]*/ });
 
@@ -136,8 +163,14 @@ const allTokens = [
   Go, Defer, Make, Append, Len, Cap, Delete, Copy, New,
   Map, Chan, Const, Var, True, False, Nil,
   Struct, Interface, Break, Continue, Fallthrough, Func, Type, Filter,
+  // v1 abbreviated keywords (before Ident, longer patterns first)
+  Cpy, Apl, Rng, Flt, Mk, Ln, Mp, Ty, Fn, Nw, Cp, Dx, Ft,
+  // Numeric type keywords (before Ident)
+  F64, I64, F32, I32, I16, U64, I8,
   // Identifier
   Ident,
+  // Hash (before single-char operators)
+  Hash,
   // Single-char operators and delimiters
   At, Question,
   Assign, Plus, Minus, Star, Slash, Percent,
@@ -303,7 +336,11 @@ export class AETParser extends CstParser {
         });
         this.CONSUME(RParen);
       }},
-      { ALT: () => this.SUBRULE3(this.typeExpr) },
+      { ALT: () => {
+        this.CONSUME(Bang);
+        this.OPTION(() => this.SUBRULE3(this.typeExpr));  // !T or bare !
+      }},
+      { ALT: () => this.SUBRULE4(this.typeExpr) },
     ]);
   });
 
@@ -320,7 +357,10 @@ export class AETParser extends CstParser {
         this.SUBRULE2(this.typeExpr);
       }},
       { ALT: () => {
-        this.CONSUME(Map);
+        this.OR2([
+          { ALT: () => this.CONSUME(Map) },
+          { ALT: () => this.CONSUME(Mp) },
+        ]);
         this.CONSUME2(LBrack);
         this.SUBRULE3(this.typeExpr);
         this.CONSUME2(RBrack);
@@ -331,7 +371,10 @@ export class AETParser extends CstParser {
         this.SUBRULE5(this.typeExpr);
       }},
       { ALT: () => {
-        this.CONSUME(Func);
+        this.OR3([
+          { ALT: () => this.CONSUME(Func) },
+          { ALT: () => this.CONSUME(Fn) },
+        ]);
         this.CONSUME(LParen);
         this.OPTION(() => this.SUBRULE(this.paramList));
         this.CONSUME(RParen);
@@ -339,6 +382,14 @@ export class AETParser extends CstParser {
           this.SUBRULE6(this.typeExpr);
         });
       }},
+      // Numeric type keywords (f64, i64, etc.)
+      { ALT: () => this.CONSUME(F64) },
+      { ALT: () => this.CONSUME(I64) },
+      { ALT: () => this.CONSUME(F32) },
+      { ALT: () => this.CONSUME(I32) },
+      { ALT: () => this.CONSUME(I16) },
+      { ALT: () => this.CONSUME(I8) },
+      { ALT: () => this.CONSUME(U64) },
       { ALT: () => {
         this.CONSUME(Ident);
         this.OPTION3(() => {
@@ -469,7 +520,10 @@ export class AETParser extends CstParser {
       { GATE: () => this.isRangeLoop(), ALT: () => {
         this.SUBRULE(this.exprList);
         this.CONSUME(ShortDecl);
-        this.CONSUME(Range);
+        this.OR2([
+          { ALT: () => this.CONSUME(Range) },
+          { ALT: () => this.CONSUME(Rng) },
+        ]);
         this.SUBRULE(this.expr);
         this.noCompositeLit = false;
         this.CONSUME(LBrace);
@@ -545,7 +599,7 @@ export class AETParser extends CstParser {
     let i = 1;
     let t = this.LA(i);
     while (t && !tokenMatcher(t, LBrace) && !tokenMatcher(t, RBrace)) {
-      if (tokenMatcher(t, Range)) return true;
+      if (tokenMatcher(t, Range) || tokenMatcher(t, Rng)) return true;
       i++;
       t = this.LA(i);
       if (i > 20) break;
@@ -642,6 +696,7 @@ export class AETParser extends CstParser {
       { ALT: () => this.CONSUME(Break) },
       { ALT: () => this.CONSUME(Continue) },
       { ALT: () => this.CONSUME(Fallthrough) },
+      { ALT: () => this.CONSUME(Ft) },
     ]);
   });
 
@@ -759,6 +814,7 @@ export class AETParser extends CstParser {
           { ALT: () => this.CONSUME(Star) },
           { ALT: () => this.CONSUME(Amp) },
           { ALT: () => this.CONSUME(ChanArrow) },
+          { ALT: () => this.CONSUME(Hash) },
         ]);
         this.SUBRULE(this.unaryExpr);
       }},
@@ -868,16 +924,23 @@ export class AETParser extends CstParser {
       }},
       // Composite literal with type: TypeName { ... }
       // Handled in postfixExpr via selector + call
-      // Builtins
+      // Builtins (full and abbreviated forms)
       { ALT: () => {
         this.OR2([
           { ALT: () => this.CONSUME(Make) },
+          { ALT: () => this.CONSUME(Mk) },
           { ALT: () => this.CONSUME(Append) },
+          { ALT: () => this.CONSUME(Apl) },
           { ALT: () => this.CONSUME(Len) },
+          { ALT: () => this.CONSUME(Ln) },
           { ALT: () => this.CONSUME(Cap) },
           { ALT: () => this.CONSUME(Delete) },
+          { ALT: () => this.CONSUME(Dx) },
           { ALT: () => this.CONSUME(Copy) },
+          { ALT: () => this.CONSUME(Cpy) },
+          { ALT: () => this.CONSUME(Cp) },
           { ALT: () => this.CONSUME(New) },
+          { ALT: () => this.CONSUME(Nw) },
         ]);
       }},
       // Func literal: func(params)(rets){body}

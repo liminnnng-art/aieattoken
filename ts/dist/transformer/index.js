@@ -175,6 +175,14 @@ function transformParamList(node) {
     });
 }
 function transformReturnType(node) {
+    // Check for error sugar: ->!T means -> (T, error)
+    if (tok(node, "Bang")) {
+        const types = children(node, "typeExpr");
+        if (types.length > 0) {
+            return [...types.map(te => transformTypeExpr(te)), IR.simpleType("error")];
+        }
+        return [IR.simpleType("error")];
+    }
     const types = children(node, "typeExpr");
     return types.map(te => transformTypeExpr(te));
 }
@@ -189,13 +197,35 @@ function transformTypeExpr(node) {
         const inner = child(node, "typeExpr");
         return inner ? IR.sliceType(transformTypeExpr(inner)) : IR.sliceType(IR.simpleType("interface{}"));
     }
-    // Map: map[K]V
-    if (tok(node, "Map")) {
+    // Map: map[K]V (also handle v1 abbreviation "Mp")
+    if (tok(node, "Map") || tok(node, "Mp")) {
         const types = children(node, "typeExpr");
         const key = types[0] ? transformTypeExpr(types[0]) : IR.simpleType("string");
         const val = types[1] ? transformTypeExpr(types[1]) : IR.simpleType("interface{}");
         return IR.mapType(key, val);
     }
+    // Func type (also handle v1 abbreviation "Fn")
+    if (tok(node, "Fn")) {
+        // Fn used as type keyword behaves like Func in type context
+        const inner = child(node, "typeExpr");
+        const elt = inner ? transformTypeExpr(inner) : IR.simpleType("interface{}");
+        return IR.simpleType("func(" + elt.name + ")");
+    }
+    // Abbreviated numeric types
+    if (tok(node, "F64"))
+        return IR.simpleType("float64");
+    if (tok(node, "I64"))
+        return IR.simpleType("int64");
+    if (tok(node, "F32"))
+        return IR.simpleType("float32");
+    if (tok(node, "I32"))
+        return IR.simpleType("int32");
+    if (tok(node, "I16"))
+        return IR.simpleType("int16");
+    if (tok(node, "I8"))
+        return IR.simpleType("int8");
+    if (tok(node, "U64"))
+        return IR.simpleType("uint64");
     // Chan
     if (tok(node, "Chan")) {
         const inner = child(node, "typeExpr");
@@ -284,7 +314,8 @@ function transformForStmt(node) {
         return { kind: "ForStmt", init, cond, post, body, stmtIndex: si };
     }
     // Range loop: for k, v := range expr { ... }
-    if (tok(node, "Range")) {
+    // Support both "range" (v2) and "rng" (v1 abbreviation)
+    if (tok(node, "Range") || tok(node, "Rng")) {
         const el = child(node, "exprList");
         const exprs = el ? children(el, "expr") : [];
         const keys = exprs.map(e => exprToString(transformExpr(e)));
@@ -406,6 +437,8 @@ function transformBranchStmt(node) {
     if (tok(node, "Continue"))
         t = "continue";
     if (tok(node, "Fallthrough"))
+        t = "fallthrough";
+    if (tok(node, "Ft"))
         t = "fallthrough";
     return { kind: "BranchStmt", tok: t, stmtIndex: nextStmtIndex() };
 }
@@ -550,6 +583,12 @@ function transformMulExpr(node) {
     return result;
 }
 function transformUnaryExpr(node) {
+    // Hash (#) as len() sugar
+    if (tok(node, "Hash")) {
+        const inner = child(node, "unaryExpr");
+        const x = inner ? transformExpr(inner) : { kind: "Ident", name: "_" };
+        return { kind: "CallExpr", func: { kind: "Ident", name: "len" }, args: [x] };
+    }
     const inner = child(node, "unaryExpr");
     if (inner) {
         const ops = ["Plus", "Minus", "Bang", "Star", "Amp", "ChanArrow"];

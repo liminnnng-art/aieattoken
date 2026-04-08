@@ -1,8 +1,8 @@
 {
-  "_version": "0.1",
+  "_version": "0.2",
   "_tokenizer": "cl100k_base",
-  "_description": "Go stdlib alias mapping for Aieattoken. Every alias is a single cl100k_base token.",
-  "_count": 50,
+  "_description": "Go stdlib alias mapping for AET-Go v2. Every alias is a single cl100k_base token.",
+  "_count": 89,
   "aliases": {
     "pl": {
       "go": "fmt.Println",
@@ -26,6 +26,10 @@
     },
     "Sn": {
       "go": "fmt.Scan",
+      "pkg": "fmt"
+    },
+    "fp": {
+      "go": "fmt.Fprintln",
       "pkg": "fmt"
     },
     "En": {
@@ -88,12 +92,57 @@
       "go": "strings.ToLower",
       "pkg": "strings"
     },
+    "Su": {
+      "go": "strings.ToUpper",
+      "pkg": "strings"
+    },
+    "Sa": {
+      "go": "strings.ReplaceAll",
+      "pkg": "strings"
+    },
+    "Tp": {
+      "go": "strings.TrimPrefix",
+      "pkg": "strings"
+    },
+    "Tx": {
+      "go": "strings.TrimSuffix",
+      "pkg": "strings"
+    },
+    "Si": {
+      "go": "strings.Index",
+      "pkg": "strings"
+    },
+    "Sb": {
+      "go": "strings.Builder",
+      "pkg": "strings",
+      "isType": true
+    },
+    "Rp": {
+      "go": "strings.Repeat",
+      "pkg": "strings"
+    },
+    "Sn2": {
+      "go": "strings.NewReader",
+      "pkg": "strings"
+    },
     "Ai": {
       "go": "strconv.Atoi",
       "pkg": "strconv"
     },
     "ia": {
       "go": "strconv.Itoa",
+      "pkg": "strconv"
+    },
+    "Fi": {
+      "go": "strconv.FormatInt",
+      "pkg": "strconv"
+    },
+    "Pi": {
+      "go": "strconv.ParseInt",
+      "pkg": "strconv"
+    },
+    "Pf2": {
+      "go": "strconv.ParseFloat",
       "pkg": "strconv"
     },
     "jm": {
@@ -110,6 +159,10 @@
     },
     "Je": {
       "go": "json.NewEncoder",
+      "pkg": "encoding/json"
+    },
+    "Ji": {
+      "go": "json.MarshalIndent",
       "pkg": "encoding/json"
     },
     "hl": {
@@ -132,6 +185,26 @@
       "go": "http.Error",
       "pkg": "net/http"
     },
+    "Hm": {
+      "go": "http.NewServeMux",
+      "pkg": "net/http"
+    },
+    "Ok": {
+      "go": "http.StatusOK",
+      "pkg": "net/http"
+    },
+    "Nf": {
+      "go": "http.StatusNotFound",
+      "pkg": "net/http"
+    },
+    "Se": {
+      "go": "http.StatusInternalServerError",
+      "pkg": "net/http"
+    },
+    "Mg": {
+      "go": "http.MethodGet",
+      "pkg": "net/http"
+    },
     "Fo": {
       "go": "os.Open",
       "pkg": "os"
@@ -152,12 +225,44 @@
       "go": "os.WriteFile",
       "pkg": "os"
     },
+    "ox": {
+      "go": "os.Exit",
+      "pkg": "os"
+    },
+    "Oa": {
+      "go": "os.Args",
+      "pkg": "os"
+    },
+    "Or": {
+      "go": "os.Remove",
+      "pkg": "os"
+    },
+    "Om": {
+      "go": "os.Mkdir",
+      "pkg": "os"
+    },
+    "Ma": {
+      "go": "os.MkdirAll",
+      "pkg": "os"
+    },
     "Ra": {
       "go": "io.ReadAll",
       "pkg": "io"
     },
     "ic": {
       "go": "io.Copy",
+      "pkg": "io"
+    },
+    "Eo": {
+      "go": "io.EOF",
+      "pkg": "io"
+    },
+    "Id": {
+      "go": "io.Discard",
+      "pkg": "io"
+    },
+    "Nc": {
+      "go": "io.NopCloser",
       "pkg": "io"
     },
     "tn": {
@@ -172,8 +277,21 @@
       "go": "time.Sleep",
       "pkg": "time"
     },
-    "Tp": {
-      "go": "time.Parse",
+    "Td": {
+      "go": "time.Duration",
+      "pkg": "time",
+      "isType": true
+    },
+    "Tm": {
+      "go": "time.Millisecond",
+      "pkg": "time"
+    },
+    "Tc": {
+      "go": "time.Second",
+      "pkg": "time"
+    },
+    "Tr": {
+      "go": "time.RFC3339",
       "pkg": "time"
     },
     "wg": {
@@ -195,6 +313,10 @@
       "go": "sort.Slice",
       "pkg": "sort"
     },
+    "Ss": {
+      "go": "sort.SliceStable",
+      "pkg": "sort"
+    },
     "lp": {
       "go": "log.Println",
       "pkg": "log"
@@ -206,6 +328,43 @@
     "pj": {
       "go": "filepath.Join",
       "pkg": "path/filepath"
+    },
+    "Bs": {
+      "go": "bufio.NewScanner",
+      "pkg": "bufio"
+    },
+    "Bw": {
+      "go": "bufio.NewWriter",
+      "pkg": "bufio"
+    },
+    "Br": {
+      "go": "bufio.NewReader",
+      "pkg": "bufio"
+    },
+    "Bb": {
+      "go": "bytes.Buffer",
+      "pkg": "bytes",
+      "isType": true
+    },
+    "Rc": {
+      "go": "regexp.MustCompile",
+      "pkg": "regexp"
+    },
+    "Rv": {
+      "go": "reflect.ValueOf",
+      "pkg": "reflect"
+    },
+    "Rt": {
+      "go": "reflect.TypeOf",
+      "pkg": "reflect"
+    },
+    "Sh": {
+      "go": "sha256.Sum256",
+      "pkg": "crypto/sha256"
+    },
+    "Be": {
+      "go": "base64.StdEncoding",
+      "pkg": "encoding/base64"
     }
   }
 }

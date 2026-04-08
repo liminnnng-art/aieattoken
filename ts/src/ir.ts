@@ -32,7 +32,11 @@ export type IRNode =
   | Java_ClassDecl
   | Java_TryCatch
   | Java_EnhancedFor
-  | Java_ThrowStmt;
+  | Java_ThrowStmt
+  // AET-Java specific nodes (v1)
+  | Java_RecordDecl
+  | Java_EnumDecl
+  | Java_SealedInterfaceDecl;
 
 export type IRExpr =
   | IRIdent
@@ -64,7 +68,9 @@ export type IRExpr =
   | Java_LambdaExpr
   | Java_InstanceofExpr
   | Java_CastExpr
-  | Java_TernaryExpr;
+  | Java_TernaryExpr
+  // AET-Java specific expressions (v1)
+  | Java_SwitchExpr;
 
 export type IRType = {
   name: string;        // "int", "string", "error", "[]byte", "map[string]int", "*User", etc.
@@ -507,11 +513,12 @@ export interface Java_LambdaExpr {
   body: IRBlockStmt | IRExpr;    // single expr or block
 }
 
-// instanceof check
+// instanceof check (with optional pattern binding for Java 16+)
 export interface Java_InstanceofExpr {
   kind: "Java_InstanceofExpr";
   expr: IRExpr;
   type: IRType;
+  binding?: string;           // pattern variable name (e.g., "obj" in "x instanceof Foo obj")
 }
 
 // Cast expression: (Type) expr
@@ -527,4 +534,52 @@ export interface Java_TernaryExpr {
   cond: IRExpr;
   ifTrue: IRExpr;
   ifFalse: IRExpr;
+}
+
+// ============= AET-Java v1 IR Nodes =============
+// These support Java 14+ features needed by AET-Java syntax.
+
+// Record declaration: @Name(Type field, ...)
+export interface Java_RecordDecl {
+  kind: "Java_RecordDecl";
+  name: string;
+  typeParams: string[];
+  components: IRParam[];            // record components (fields)
+  interfaces: string[];
+  methods: IRFuncDecl[];            // explicit methods (e.g., custom toString)
+  stmtIndex: number;
+}
+
+// Enum declaration: #Name{VALUE1, VALUE2, ...}
+export interface Java_EnumDecl {
+  kind: "Java_EnumDecl";
+  name: string;
+  values: { name: string; args: IRExpr[] }[];
+  fields: IRField[];
+  methods: IRFuncDecl[];
+  constructors: IRFuncDecl[];
+  interfaces: string[];
+  stmtIndex: number;
+}
+
+// Sealed interface declaration: @Name[+Permitted1,Permitted2;methods]
+export interface Java_SealedInterfaceDecl {
+  kind: "Java_SealedInterfaceDecl";
+  name: string;
+  typeParams: string[];
+  permits: string[];
+  methods: IRMethodSig[];
+  stmtIndex: number;
+}
+
+// Switch expression (Java 14+): switch expr { case VAL -> result; ... }
+export interface Java_SwitchExpr {
+  kind: "Java_SwitchExpr";
+  tag: IRExpr;
+  cases: Java_SwitchExprCase[];
+}
+
+export interface Java_SwitchExprCase {
+  values: IRExpr[] | null;          // null = default
+  body: IRExpr | IRBlockStmt;       // expression or block with yield
 }

@@ -1,0 +1,1 @@
+bubbleSort(a){for i:=#a-1;i>=1;i--{for j:=0..i{if a[j]>a[j+1]{t:=a[j];a[j]=a[j+1];a[j+1]=t}}}};main(){a:=make([]int,0);a+=5,3,8,4,2,7,1,6;bubbleSort(a);pl(a)}

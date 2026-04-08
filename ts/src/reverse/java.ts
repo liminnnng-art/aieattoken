@@ -1,6 +1,6 @@
-// Reverse transpiler: Java → IR → AET
+// Reverse transpiler: Java → IR → AET / AET-Java
 // Uses ASTDumper.java (JDK com.sun.source.tree API) to get JSON AST,
-// then converts to IR, then to AET.
+// then converts to IR, then to AET (shared) or AET-Java (.aetj).
 
 import { execSync } from "child_process";
 import { resolve, dirname } from "path";
@@ -118,6 +118,22 @@ const JAVA_TYPE_MAP: Record<string, string> = {
   Throwable: "error",
 };
 
+/** Get the original Java type name (no Go mapping). Used by AET-Java output. */
+function javaTypeNodeName(node: any): string {
+  if (!node) return "Object";
+  if (typeof node === "string") return node;
+  if (node.Kind === "PrimitiveType") return node.Name || "int";
+  if (node.Kind === "Ident") return node.Name || "Object";
+  if (node.Kind === "ArrayType") return javaTypeNodeName(node.ElemType) + "[]";
+  if (node.Kind === "ParameterizedType") {
+    const base = javaTypeNodeName(node.Type);
+    const args = (node.TypeArgs || []).map(javaTypeNodeName).join(",");
+    return args ? `${base}<${args}>` : base;
+  }
+  if (node.Kind === "FieldAccess") return `${javaTypeNodeName(node.Expr)}.${node.Name}`;
+  return node.Name || "Object";
+}
+
 function mapJavaType(node: any): IR.IRType {
   if (!node) return IR.simpleType("_in");
 
@@ -188,12 +204,18 @@ export function javaAstToIR(javaAst: any): IR.IRProgram {
       case "ClassDecl":
         convertClassDecl(decl, decls);
         break;
+      case "RecordDecl":
+        decls.push(convertRecordDecl(decl));
+        break;
       case "InterfaceDecl":
-        decls.push(convertInterfaceDecl(decl));
+        if (isSealedInterface(decl)) {
+          decls.push(convertSealedInterfaceDecl(decl));
+        } else {
+          decls.push(convertInterfaceDecl(decl));
+        }
         break;
       case "EnumDecl":
-        // Enums become const groups
-        decls.push(convertEnumDecl(decl));
+        decls.push(convertEnumDeclToIR(decl));
         break;
       default:
         break;
@@ -221,7 +243,7 @@ function convertClassDecl(node: any, out: IR.IRNode[]): void {
   const constructors = members.filter((m: any) => m.Kind === "ConstructorDecl");
   const fields = members.filter((m: any) => m.Kind === "VarDecl");
   const innerClasses = members.filter((m: any) =>
-    m.Kind === "ClassDecl" || m.Kind === "InterfaceDecl" || m.Kind === "EnumDecl",
+    m.Kind === "ClassDecl" || m.Kind === "InterfaceDecl" || m.Kind === "EnumDecl" || m.Kind === "RecordDecl",
   );
 
   const instanceFields = fields.filter(
@@ -243,8 +265,12 @@ function convertClassDecl(node: any, out: IR.IRNode[]): void {
     // Recurse inner classes
     for (const ic of innerClasses) {
       if (ic.Kind === "ClassDecl") convertClassDecl(ic, out);
-      else if (ic.Kind === "InterfaceDecl") out.push(convertInterfaceDecl(ic));
-      else if (ic.Kind === "EnumDecl") out.push(convertEnumDecl(ic));
+      else if (ic.Kind === "RecordDecl") out.push(convertRecordDecl(ic));
+      else if (ic.Kind === "InterfaceDecl") {
+        if (isSealedInterface(ic)) out.push(convertSealedInterfaceDecl(ic));
+        else out.push(convertInterfaceDecl(ic));
+      }
+      else if (ic.Kind === "EnumDecl") out.push(convertEnumDeclToIR(ic));
     }
     return;
   }
@@ -279,10 +305,13 @@ function convertClassDecl(node: any, out: IR.IRNode[]): void {
   }
 
   // Strategy 3: General class → Java_ClassDecl
-  const irFields: IR.IRField[] = fields.map((f: any) => ({
-    name: f.Name,
-    type: mapJavaType(f.Type),
-  }));
+  const irFields: IR.IRField[] = fields.map((f: any) => {
+    const field: IR.IRField = { name: f.Name, type: mapJavaType(f.Type) };
+    (field as any).javaModifiers = f.Modifiers || [];
+    (field as any).javaTypeName = javaTypeNodeName(f.Type);
+    if (f.Init) (field as any).javaInit = convertExpr(f.Init);
+    return field;
+  });
   const irMethods = methods.map(convertMethodDecl);
   const irConstructors = constructors.map(convertConstructorDecl);
   const irInnerClasses: IR.Java_ClassDecl[] = [];
@@ -311,7 +340,18 @@ function convertClassToJavaClassDecl(node: any): IR.Java_ClassDecl {
   const methods = members.filter((m: any) => m.Kind === "MethodDecl");
   const constructors = members.filter((m: any) => m.Kind === "ConstructorDecl");
   const fields = members.filter((m: any) => m.Kind === "VarDecl");
-  const innerClasses = members.filter((m: any) => m.Kind === "ClassDecl");
+  const innerClasses = members.filter((m: any) =>
+    m.Kind === "ClassDecl" || m.Kind === "InterfaceDecl" || m.Kind === "EnumDecl" || m.Kind === "RecordDecl",
+  );
+
+  // Convert fields and attach Java-specific metadata
+  const irFields = fields.map((f: any) => {
+    const field: IR.IRField = { name: f.Name, type: mapJavaType(f.Type) };
+    (field as any).javaModifiers = f.Modifiers || [];
+    (field as any).javaTypeName = javaTypeNodeName(f.Type);
+    if (f.Init) (field as any).javaInit = convertExpr(f.Init);
+    return field;
+  });
 
   return {
     kind: "Java_ClassDecl",
@@ -319,10 +359,15 @@ function convertClassToJavaClassDecl(node: any): IR.Java_ClassDecl {
     modifiers: node.Modifiers || [],
     superClass: node.Extends ? typeNodeName(node.Extends) : undefined,
     interfaces: (node.Implements || []).map(typeNodeName),
-    fields: fields.map((f: any) => ({ name: f.Name, type: mapJavaType(f.Type) })),
+    fields: irFields,
     methods: methods.map(convertMethodDecl),
     constructors: constructors.map(convertConstructorDecl),
-    innerClasses: innerClasses.map(convertClassToJavaClassDecl),
+    innerClasses: innerClasses.map((ic: any) => {
+      if (ic.Kind === "ClassDecl") return convertClassToJavaClassDecl(ic);
+      // Wrap non-class inner types in a pseudo Java_ClassDecl for the array type
+      // (The actual conversion will be handled in the AETJ emitter)
+      return convertClassToJavaClassDecl(ic);
+    }),
     stmtIndex: 0,
   };
 }
@@ -422,6 +467,133 @@ function convertEnumDecl(node: any): IR.IRConstDecl {
   return { kind: "ConstDecl", specs, stmtIndex: 0 };
 }
 
+/** Convert enum to Java_EnumDecl (for AET-Java output). */
+function convertEnumDeclToIR(node: any): IR.Java_EnumDecl {
+  const members: any[] = node.Body || [];
+  const values: { name: string; args: IR.IRExpr[] }[] = [];
+  const fields: IR.IRField[] = [];
+  const methods: IR.IRFuncDecl[] = [];
+  const constructors: IR.IRFuncDecl[] = [];
+
+  for (const m of members) {
+    if (m.Kind === "EnumConstant" || (m.Kind === "VarDecl" && !m.Type)) {
+      // Enum constant
+      values.push({
+        name: m.Name || "",
+        args: (m.Args || []).map(convertExpr),
+      });
+    } else if (m.Kind === "VarDecl") {
+      fields.push({ name: m.Name || "", type: mapJavaType(m.Type) });
+      // Attach modifiers for AET-Java
+      const f = fields[fields.length - 1];
+      (f as any).javaModifiers = m.Modifiers || [];
+      (f as any).javaTypeName = javaTypeNodeName(m.Type);
+      if (m.Init) (f as any).javaInit = convertExpr(m.Init);
+    } else if (m.Kind === "MethodDecl") {
+      const md = convertMethodDecl(m);
+      (md as any).javaModifiers = m.Modifiers || [];
+      (md as any).javaReturnTypeName = m.ReturnType ? javaTypeNodeName(m.ReturnType) : "";
+      (md as any).javaParams = (m.Params || []).map((p: any) => ({
+        name: p.Name || "_",
+        typeName: javaTypeNodeName(p.Type),
+      }));
+      methods.push(md);
+    } else if (m.Kind === "ConstructorDecl") {
+      const cd = convertConstructorDecl(m);
+      (cd as any).javaModifiers = m.Modifiers || [];
+      (cd as any).javaParams = (m.Params || []).map((p: any) => ({
+        name: p.Name || "_",
+        typeName: javaTypeNodeName(p.Type),
+      }));
+      constructors.push(cd);
+    }
+  }
+
+  return {
+    kind: "Java_EnumDecl",
+    name: node.Name || "",
+    values,
+    fields,
+    methods,
+    constructors,
+    interfaces: (node.Implements || []).map(typeNodeName),
+    stmtIndex: 0,
+  };
+}
+
+/** Check if an interface is sealed (has Permits list). */
+function isSealedInterface(node: any): boolean {
+  return !!(node.Permits && node.Permits.length > 0) ||
+    !!((node.Modifiers || []).includes("sealed"));
+}
+
+/** Convert sealed interface to Java_SealedInterfaceDecl. */
+function convertSealedInterfaceDecl(node: any): IR.Java_SealedInterfaceDecl {
+  const members: any[] = node.Body || [];
+  const methods: IR.IRMethodSig[] = [];
+
+  for (const m of members) {
+    if (m.Kind === "MethodDecl") {
+      methods.push({
+        name: m.Name || "",
+        params: convertParams(m.Params),
+        results: m.ReturnType ? convertReturnTypes(m.ReturnType) : [],
+      });
+    }
+  }
+
+  const permits = (node.Permits || []).map(typeNodeName);
+
+  return {
+    kind: "Java_SealedInterfaceDecl",
+    name: node.Name || "",
+    typeParams: (node.TypeParams || []).map((tp: any) => tp.Name || tp),
+    permits,
+    methods,
+    stmtIndex: 0,
+  };
+}
+
+/** Convert record declaration to Java_RecordDecl. */
+function convertRecordDecl(node: any): IR.Java_RecordDecl {
+  const components: IR.IRParam[] = (node.Params || node.Components || []).map((p: any) => ({
+    name: p.Name || "_",
+    type: mapJavaType(p.Type),
+  }));
+  // Attach original Java type names for AET-Java output
+  const javaComponents = (node.Params || node.Components || []).map((p: any) => ({
+    name: p.Name || "_",
+    typeName: javaTypeNodeName(p.Type),
+  }));
+
+  const members: any[] = node.Body || [];
+  const methods: IR.IRFuncDecl[] = [];
+  for (const m of members) {
+    if (m.Kind === "MethodDecl") {
+      const md = convertMethodDecl(m);
+      (md as any).javaModifiers = m.Modifiers || [];
+      (md as any).javaReturnTypeName = m.ReturnType ? javaTypeNodeName(m.ReturnType) : "";
+      (md as any).javaParams = (m.Params || []).map((p: any) => ({
+        name: p.Name || "_",
+        typeName: javaTypeNodeName(p.Type),
+      }));
+      methods.push(md);
+    }
+  }
+
+  const result: IR.Java_RecordDecl = {
+    kind: "Java_RecordDecl",
+    name: node.Name || "",
+    typeParams: (node.TypeParams || []).map((tp: any) => tp.Name || tp),
+    components,
+    interfaces: (node.Implements || []).map(typeNodeName),
+    methods,
+    stmtIndex: 0,
+  };
+  (result as any).javaComponents = javaComponents;
+  return result;
+}
+
 // ---------------------------------------------------------------------------
 // Method / Constructor conversion
 // ---------------------------------------------------------------------------
@@ -432,7 +604,15 @@ function convertMethodDecl(node: any): IR.IRFuncDecl {
   const results = node.ReturnType ? convertReturnTypes(node.ReturnType) : [];
   const body = convertBlockStmt(node.Body);
 
-  return { kind: "FuncDecl", name, params, results, body, stmtIndex: 0 };
+  const result: IR.IRFuncDecl = { kind: "FuncDecl", name, params, results, body, stmtIndex: 0 };
+  // Preserve Java-specific metadata for AET-Java output
+  (result as any).javaModifiers = node.Modifiers || [];
+  (result as any).javaReturnTypeName = node.ReturnType ? javaTypeNodeName(node.ReturnType) : "";
+  (result as any).javaParams = (node.Params || []).map((p: any) => ({
+    name: p.Name || "_",
+    typeName: javaTypeNodeName(p.Type),
+  }));
+  return result;
 }
 
 function convertConstructorDecl(node: any): IR.IRFuncDecl {
@@ -440,7 +620,14 @@ function convertConstructorDecl(node: any): IR.IRFuncDecl {
   const params = convertParams(node.Params);
   const body = convertBlockStmt(node.Body);
 
-  return { kind: "FuncDecl", name: "init", params, results: [], body, stmtIndex: 0 };
+  const result: IR.IRFuncDecl = { kind: "FuncDecl", name: "init", params, results: [], body, stmtIndex: 0 };
+  // Preserve Java-specific metadata for AET-Java output
+  (result as any).javaModifiers = node.Modifiers || [];
+  (result as any).javaParams = (node.Params || []).map((p: any) => ({
+    name: p.Name || "_",
+    typeName: javaTypeNodeName(p.Type),
+  }));
+  return result;
 }
 
 function convertParams(params: any[] | undefined): IR.IRParam[] {
@@ -926,6 +1113,7 @@ function convertExpr(node: any): IR.IRExpr {
         kind: "Java_InstanceofExpr",
         expr: convertExpr(node.Expr),
         type: mapJavaType(node.Type),
+        binding: node.Binding || node.PatternVar || undefined,
       } as IR.Java_InstanceofExpr;
 
     case "TernaryExpr":
@@ -962,8 +1150,7 @@ function convertExpr(node: any): IR.IRExpr {
       return { kind: "Ident", name: JAVA_TYPE_MAP[node.Name] ?? node.Name };
 
     case "SwitchExpr":
-      // Switch expressions are complex — emit tag expression as fallback
-      return node.Expr ? convertExpr(node.Expr) : { kind: "Ident", name: "_" };
+      return { kind: "Ident", name: "/* switchExpr */" } as any;
 
     default:
       return { kind: "Ident", name: node.Name || "_" };

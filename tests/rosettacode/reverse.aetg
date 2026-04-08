@@ -1,0 +1,1 @@
+reverse(s){runes:=[]rune(s);for i,j:=0,#runes-1;i<j;i,j=i+1,j-1{runes[i],runes[j]=runes[j],runes[i]};string(runes)};main(){pl(reverse("Hello, World!"))}

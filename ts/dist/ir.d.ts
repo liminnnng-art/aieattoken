@@ -1,5 +1,5 @@
-export type IRNode = IRProgram | IRFuncDecl | IRStructDecl | IRInterfaceDecl | IRTypeAlias | IRBlockStmt | IRIfStmt | IRForStmt | IRRangeStmt | IRSwitchStmt | IRCaseClause | IRSelectStmt | IRCommClause | IRReturnStmt | IRDeferStmt | IRGoStmt | IRAssignStmt | IRShortDeclStmt | IRExprStmt | IRIncDecStmt | IRSendStmt | IRBranchStmt | IRVarDecl | IRConstDecl | Java_ClassDecl | Java_TryCatch | Java_EnhancedFor | Java_ThrowStmt;
-export type IRExpr = IRIdent | IRBasicLit | IRCompositeLit | IRFuncLit | IRBinaryExpr | IRUnaryExpr | IRCallExpr | IRSelectorExpr | IRIndexExpr | IRSliceExpr | IRTypeAssertExpr | IRStarExpr | IRUnaryRecvExpr | IRKeyValueExpr | IRParenExpr | IRErrorPropExpr | IRPipeExpr | IRMapTypeExpr | IRArrayTypeExpr | IRChanTypeExpr | IRFuncTypeExpr | IRInterfaceTypeExpr | IRStructTypeExpr | IRRawGoExpr | Java_NewExpr | Java_LambdaExpr | Java_InstanceofExpr | Java_CastExpr | Java_TernaryExpr;
+export type IRNode = IRProgram | IRFuncDecl | IRStructDecl | IRInterfaceDecl | IRTypeAlias | IRBlockStmt | IRIfStmt | IRForStmt | IRRangeStmt | IRSwitchStmt | IRCaseClause | IRSelectStmt | IRCommClause | IRReturnStmt | IRDeferStmt | IRGoStmt | IRAssignStmt | IRShortDeclStmt | IRExprStmt | IRIncDecStmt | IRSendStmt | IRBranchStmt | IRVarDecl | IRConstDecl | Java_ClassDecl | Java_TryCatch | Java_EnhancedFor | Java_ThrowStmt | Java_RecordDecl | Java_EnumDecl | Java_SealedInterfaceDecl;
+export type IRExpr = IRIdent | IRBasicLit | IRCompositeLit | IRFuncLit | IRBinaryExpr | IRUnaryExpr | IRCallExpr | IRSelectorExpr | IRIndexExpr | IRSliceExpr | IRTypeAssertExpr | IRStarExpr | IRUnaryRecvExpr | IRKeyValueExpr | IRParenExpr | IRErrorPropExpr | IRPipeExpr | IRMapTypeExpr | IRArrayTypeExpr | IRChanTypeExpr | IRFuncTypeExpr | IRInterfaceTypeExpr | IRStructTypeExpr | IRRawGoExpr | Java_NewExpr | Java_LambdaExpr | Java_InstanceofExpr | Java_CastExpr | Java_TernaryExpr | Java_SwitchExpr;
 export type IRType = {
     name: string;
     isPointer?: boolean;
@@ -359,6 +359,7 @@ export interface Java_InstanceofExpr {
     kind: "Java_InstanceofExpr";
     expr: IRExpr;
     type: IRType;
+    binding?: string;
 }
 export interface Java_CastExpr {
     kind: "Java_CastExpr";
@@ -370,4 +371,43 @@ export interface Java_TernaryExpr {
     cond: IRExpr;
     ifTrue: IRExpr;
     ifFalse: IRExpr;
+}
+export interface Java_RecordDecl {
+    kind: "Java_RecordDecl";
+    name: string;
+    typeParams: string[];
+    components: IRParam[];
+    interfaces: string[];
+    methods: IRFuncDecl[];
+    stmtIndex: number;
+}
+export interface Java_EnumDecl {
+    kind: "Java_EnumDecl";
+    name: string;
+    values: {
+        name: string;
+        args: IRExpr[];
+    }[];
+    fields: IRField[];
+    methods: IRFuncDecl[];
+    constructors: IRFuncDecl[];
+    interfaces: string[];
+    stmtIndex: number;
+}
+export interface Java_SealedInterfaceDecl {
+    kind: "Java_SealedInterfaceDecl";
+    name: string;
+    typeParams: string[];
+    permits: string[];
+    methods: IRMethodSig[];
+    stmtIndex: number;
+}
+export interface Java_SwitchExpr {
+    kind: "Java_SwitchExpr";
+    tag: IRExpr;
+    cases: Java_SwitchExprCase[];
+}
+export interface Java_SwitchExprCase {
+    values: IRExpr[] | null;
+    body: IRExpr | IRBlockStmt;
 }

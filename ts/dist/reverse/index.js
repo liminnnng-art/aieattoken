@@ -170,9 +170,10 @@ function convertConstSpec(spec) {
     };
 }
 function convertBlockStmt(node) {
-    if (!node?.List)
+    const stmtList = node?.List || node?.Stmts;
+    if (!stmtList)
         return { kind: "BlockStmt", stmts: [] };
-    return { kind: "BlockStmt", stmts: (node.List || []).map(convertStmt).filter(Boolean) };
+    return { kind: "BlockStmt", stmts: stmtList.map(convertStmt).filter(Boolean) };
 }
 function convertStmt(node) {
     if (!node)
@@ -356,41 +357,61 @@ function exprName(expr) {
 }
 // Convert IR to AET string
 export function irToAET(program) {
-    const parts = ["!v1"];
+    const parts = ["!go-v2"];
     for (const decl of program.decls) {
         parts.push(nodeToAET(decl));
     }
     return parts.join(";");
+}
+function shortenType(name) {
+    // Note: f64/i64/f32/i32 are all 2 tokens in cl100k_base, same as float64/int64/float32/int32.
+    // No savings from abbreviating. Keep canonical Go type names for AI comprehension.
+    // Only exception: types that are genuinely shorter in tokens would go here.
+    return name;
 }
 function nodeToAET(node) {
     switch (node.kind) {
         case "FuncDecl": {
             let s = "";
             if (node.receiver) {
-                s += `${node.receiver.type.name}.`;
+                s += `${shortenType(node.receiver.type.name)}.`;
             }
             s += `${node.name}(${node.params.map(p => {
                 if (p.type.name === "interface{}")
                     return p.name;
-                return `${p.name}:${p.type.name}`;
+                return `${p.name}:${shortenType(p.type.name)}`;
             }).join(",")})`;
             if (node.results.length > 0) {
-                if (node.results.length === 1) {
-                    s += `->${node.results[0].name}`;
+                // Check for error return sugar: (T, error) -> ->!T
+                const lastResult = node.results[node.results.length - 1];
+                if (lastResult.name === "error") {
+                    const nonErrorResults = node.results.slice(0, -1);
+                    if (nonErrorResults.length === 0) {
+                        s += `->!`;
+                    }
+                    else if (nonErrorResults.length === 1) {
+                        s += `->!${shortenType(nonErrorResults[0].name)}`;
+                    }
+                    else {
+                        s += `->!(${nonErrorResults.map(r => shortenType(r.name)).join(",")})`;
+                    }
+                }
+                else if (node.results.length === 1) {
+                    s += `->${shortenType(node.results[0].name)}`;
                 }
                 else {
-                    s += `->(${node.results.map(r => r.name).join(",")})`;
+                    s += `->(${node.results.map(r => shortenType(r.name)).join(",")})`;
                 }
             }
             s += `{${blockToAET(node.body)}}`;
             return s;
         }
         case "StructDecl":
-            return `@${node.name}{${node.fields.map(f => `${f.name}:${f.type.name}`).join(";")}}`;
+            return `@${node.name}{${node.fields.map(f => `${f.name}:${shortenType(f.type.name)}`).join(";")}}`;
         case "InterfaceDecl":
             return `@${node.name}[${node.methods.map(m => {
-                const params = m.params.map(p => `${p.name}:${p.type.name}`).join(",");
-                const ret = m.results.length > 0 ? `->${m.results.length === 1 ? m.results[0].name : `(${m.results.map(r => r.name).join(",")})`}` : "";
+                const params = m.params.map(p => `${p.name}:${shortenType(p.type.name)}`).join(",");
+                const ret = m.results.length > 0 ? `->${m.results.length === 1 ? shortenType(m.results[0].name) : `(${m.results.map(r => shortenType(r.name)).join(",")})`}` : "";
                 return `${m.name}(${params})${ret}`;
             }).join(";")}]`;
         case "TypeAlias":
@@ -435,8 +456,21 @@ function nodeToAET(node) {
         }
         case "ShortDeclStmt":
             return `${node.names.join(",")}:=${node.values.map(exprToAET).join(",")}`;
-        case "AssignStmt":
+        case "AssignStmt": {
+            // Detect: s = append(s, x) -> s+=x
+            if (node.op === "=" && node.lhs.length === 1 && node.rhs.length === 1) {
+                const rhs = node.rhs[0];
+                if (rhs.kind === "CallExpr" && rhs.func.kind === "Ident" && rhs.func.name === "append" && rhs.args.length >= 2) {
+                    const target = exprToAET(node.lhs[0]);
+                    const appendTarget = exprToAET(rhs.args[0]);
+                    if (target === appendTarget) {
+                        const elems = rhs.args.slice(1).map(exprToAET).join(",");
+                        return `${target}+=${elems}`;
+                    }
+                }
+            }
             return `${node.lhs.map(exprToAET).join(",")}${node.op}${node.rhs.map(exprToAET).join(",")}`;
+        }
         case "ExprStmt":
             return exprToAET(node.expr);
         case "IncDecStmt":
@@ -448,11 +482,11 @@ function nodeToAET(node) {
         case "SendStmt":
             return `${exprToAET(node.chan)}<-${exprToAET(node.value)}`;
         case "BranchStmt":
-            return node.tok;
+            return node.tok === "fallthrough" ? "ft" : node.tok;
         case "VarDecl": {
             let s = `var ${node.name}`;
             if (node.type)
-                s += `:${node.type.name}`;
+                s += `:${shortenType(node.type.name)}`;
             if (node.value)
                 s += `=${exprToAET(node.value)}`;
             return s;
@@ -476,8 +510,13 @@ function exprToAET(expr) {
             return `${exprToAET(expr.left)}${expr.op}${exprToAET(expr.right)}`;
         case "UnaryExpr":
             return `${expr.op}${exprToAET(expr.x)}`;
-        case "CallExpr":
+        case "CallExpr": {
+            // len(x) -> #x
+            if (expr.func.kind === "Ident" && expr.func.name === "len" && expr.args.length === 1) {
+                return `#${exprToAET(expr.args[0])}`;
+            }
             return `${exprToAET(expr.func)}(${expr.args.map(exprToAET).join(",")})`;
+        }
         case "SelectorExpr":
             return `${exprToAET(expr.x)}.${expr.sel}`;
         case "IndexExpr":
