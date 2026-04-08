@@ -899,6 +899,12 @@ function transformLitBody(node: CstNode): IR.IRExpr[] {
 }
 
 function transformKvExpr(node: CstNode): IR.IRExpr {
+  // Nested composite literal without type: {expr, expr, ...}
+  const nestedLitBody = child(node, "litBody");
+  if (nestedLitBody) {
+    const elts = transformLitBody(nestedLitBody);
+    return { kind: "CompositeLit", type: undefined, elts };
+  }
   const exprs = children(node, "expr");
   if (exprs.length === 2 && tok(node, "Colon")) {
     // Key: value

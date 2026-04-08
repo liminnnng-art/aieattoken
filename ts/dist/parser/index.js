@@ -953,13 +953,25 @@ export class AETParser extends CstParser {
             { ALT: () => this.CONSUME2(Ident) },
         ]);
     });
-    // Key-value or plain expression: expr OR expr:expr (used in composite literals)
+    // Key-value or plain expression: expr OR expr:expr OR {elts} (nested composite literal)
     kvExpr = this.RULE("kvExpr", () => {
-        this.SUBRULE(this.expr);
-        this.OPTION(() => {
-            this.CONSUME(Colon);
-            this.SUBRULE2(this.expr);
-        });
+        this.OR([
+            // Nested composite literal without type: {expr, expr, ...}
+            { GATE: () => {
+                    const t = this.LA(1);
+                    return t && tokenMatcher(t, LBrace);
+                }, ALT: () => {
+                    this.SUBRULE2(this.litBody);
+                } },
+            // Regular expression (with optional key:value)
+            { ALT: () => {
+                    this.SUBRULE(this.expr);
+                    this.OPTION(() => {
+                        this.CONSUME(Colon);
+                        this.SUBRULE2(this.expr);
+                    });
+                } },
+        ]);
     });
     // Shared literal body: { kvExpr, kvExpr, ... }
     litBody = this.RULE("litBody", () => {

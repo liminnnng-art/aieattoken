@@ -850,6 +850,12 @@ function transformLitBody(node) {
     return children(node, "kvExpr").map(transformKvExpr);
 }
 function transformKvExpr(node) {
+    // Nested composite literal without type: {expr, expr, ...}
+    const nestedLitBody = child(node, "litBody");
+    if (nestedLitBody) {
+        const elts = transformLitBody(nestedLitBody);
+        return { kind: "CompositeLit", type: undefined, elts };
+    }
     const exprs = children(node, "expr");
     if (exprs.length === 2 && tok(node, "Colon")) {
         // Key: value
