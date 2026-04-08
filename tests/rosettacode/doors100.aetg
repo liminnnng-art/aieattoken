@@ -1,1 +1,1 @@
-main(){doors:=make([]bool,101);for i:=1;i<=100;i++{for j:=i;j<=100;j+=i{doors[j]=!doors[j]}};for i:=1;i<=100;i++{if doors[i]{pf("Door %d: open\n",i)}}}
+main(){doors:=make([]bool,101);for i:=1..101{for j:=i;j<=100;j+=i{doors[j]=!doors[j]}};for i:=1..101{if doors[i]{pf("Door %d: open\n",i)}}}
