@@ -1,5 +1,6 @@
 // AST Diff: Compare two IR ASTs for semantic equivalence
 // Used for round-trip testing: Go → AET → Go → AET, comparing the two AET ASTs
+// Supports Go, Java (Java_*), and Python (Py_*) IR nodes.
 export function astDiff(a, b) {
     const diffs = [];
     // Compare declarations (skip package/imports as those are auto-generated)
@@ -56,6 +57,11 @@ function compareNodes(a, b, path, diffs) {
         return;
     }
     // Object comparison
+    // Skip keys that are positional or auto-generated (not semantically meaningful).
+    // "stmtIndex" — positional counter, "tag" — Go struct tags (auto-gen),
+    // "modifiers" — Java access modifiers (may differ in AET round-trip).
+    // Note: Py_* node fields (decorators, bases, handlers, etc.) are NOT skipped —
+    // they carry semantic information needed for Python round-trip fidelity.
     const skipKeys = new Set(["stmtIndex", "tag", "modifiers"]);
     const keysA = Object.keys(a).filter(k => !skipKeys.has(k));
     const keysB = Object.keys(b).filter(k => !skipKeys.has(k));

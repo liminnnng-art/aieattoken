@@ -1637,11 +1637,18 @@ export class AETPythonParser extends CstParser {
   //          | '(' starExprList ')'              -- tuple or parenthesized expr
   private parenExpr = this.RULE("parenExpr", () => {
     this.CONSUME(LParen);
-    this.OPTION(() => {
-      this.SUBRULE(this.starExprList);
-      // Check for comprehension (generator expr)
-      this.OPTION2(() => this.SUBRULE(this.compFor));
-    });
+    // Empty parens () or contents
+    this.OR([
+      // Non-empty: expr list with optional comprehension
+      { GATE: () => this.LA(1).tokenType !== RParen,
+        ALT: () => {
+          this.SUBRULE(this.starExprList);
+          this.OPTION(() => this.SUBRULE(this.compFor));
+        }
+      },
+      // Empty tuple/parens: ()
+      { ALT: () => { /* empty */ } },
+    ]);
     this.CONSUME(RParen);
   });
 
@@ -1660,17 +1667,16 @@ export class AETPythonParser extends CstParser {
   // Handles dict literals, set literals, dict comprehensions, and set comprehensions.
   private dictSetExpr = this.RULE("dictSetExpr", () => {
     this.CONSUME(LBrace);
-    // Empty dict/set: just {}
-    this.OPTION(() => {
-      this.OR([
-        // ** unpacking in dict: {**d1, **d2}
-        { GATE: () => this.LA(1).tokenType === DoubleStar,
-          ALT: () => {
-            this.SUBRULE(this.dictItems);
-          }
-        },
-        // Try dict (expr ':' expr) or set (expr) or comprehension
-        { ALT: () => {
+    this.OR([
+      // ** unpacking in dict: {**d1, **d2}
+      { GATE: () => this.LA(1).tokenType === DoubleStar,
+        ALT: () => {
+          this.SUBRULE(this.dictItems);
+        }
+      },
+      // Dict/set with first expression
+      { GATE: () => this.LA(1).tokenType !== RBrace,
+        ALT: () => {
           this.SUBRULE(this.expr);
           this.OR2([
             // Dict: first item has ':'
@@ -1682,13 +1688,13 @@ export class AETPythonParser extends CstParser {
                   // Dict comprehension
                   { GATE: () => this.LA(1).tokenType === For,
                     ALT: () => this.SUBRULE(this.compFor) },
-                  // Dict literal (remaining items)
+                  // Dict literal (remaining items) — last alternative can be empty
                   { ALT: () => {
                     this.MANY(() => {
                       this.CONSUME(Comma);
                       this.SUBRULE(this.dictItem);
                     });
-                    this.OPTION2(() => this.CONSUME2(Comma));
+                    this.OPTION(() => this.CONSUME2(Comma));
                   }},
                 ]);
               }
@@ -1696,18 +1702,20 @@ export class AETPythonParser extends CstParser {
             // Set comprehension
             { GATE: () => this.LA(1).tokenType === For,
               ALT: () => this.SUBRULE2(this.compFor) },
-            // Set literal (remaining items)
+            // Set literal (remaining items) — last alternative can be empty
             { ALT: () => {
               this.MANY2(() => {
                 this.CONSUME3(Comma);
                 this.SUBRULE3(this.starExpr);
               });
-              this.OPTION3(() => this.CONSUME4(Comma));
+              this.OPTION2(() => this.CONSUME4(Comma));
             }},
           ]);
-        }},
-      ]);
-    });
+        }
+      },
+      // Empty dict/set: {} — must be last (empty alternative)
+      { ALT: () => { /* empty */ } },
+    ]);
     this.CONSUME(RBrace);
   });
 

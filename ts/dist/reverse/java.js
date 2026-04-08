@@ -61,6 +61,7 @@ function findJavaCommand() {
 }
 function findASTDumperDir() {
     const candidates = [
+        resolve(process.cwd(), "java-parser"),
         resolve(process.cwd(), "..", "java-parser"),
         resolve(process.cwd(), "..", "..", "java-parser"),
         resolve(dirname(new URL(import.meta.url).pathname), "..", "..", "..", "java-parser"),
@@ -121,8 +122,14 @@ function javaTypeNodeName(node) {
         return javaTypeNodeName(node.ElemType) + "[]";
     if (node.Kind === "ParameterizedType") {
         const base = javaTypeNodeName(node.Type);
-        const args = (node.TypeArgs || []).map(javaTypeNodeName).join(",");
+        const args = (node.TypeArgs || []).map(javaTypeNodeName).join(", ");
         return args ? `${base}<${args}>` : base;
+    }
+    if (node.Kind === "Wildcard") {
+        if (node.Bound) {
+            return `? ${node.BoundKind || "extends"} ${javaTypeNodeName(node.Bound)}`;
+        }
+        return "?";
     }
     if (node.Kind === "FieldAccess")
         return `${javaTypeNodeName(node.Expr)}.${node.Name}`;
@@ -164,6 +171,11 @@ function mapJavaType(node) {
             if (baseName === "Optional") {
                 const elem = typeArgs.length > 0 ? mapJavaType(typeArgs[0]) : IR.simpleType("_in");
                 return IR.pointerType(elem);
+            }
+            // Preserve full parameterized type name (e.g., Class<? extends Exception>)
+            if (typeArgs.length > 0) {
+                const argNames = typeArgs.map(javaTypeNodeName).join(", ");
+                return IR.simpleType(`${baseName}<${argNames}>`);
             }
             return IR.simpleType(baseName);
         }
@@ -231,7 +243,11 @@ export function javaAstToIR(javaAst) {
 // Class conversion — the core logic
 // ---------------------------------------------------------------------------
 function convertClassDecl(node, out) {
-    const name = node.Name || "";
+    let name = node.Name || "";
+    // Append type parameters to name if present (e.g., GenericStack<T>)
+    const tps = (node.TypeParams || []).map((tp) => tp.Name || tp);
+    if (tps.length > 0)
+        name += "<" + tps.join(", ") + ">";
     const members = node.Body || [];
     const methods = members.filter((m) => m.Kind === "MethodDecl");
     const constructors = members.filter((m) => m.Kind === "ConstructorDecl");
@@ -316,7 +332,7 @@ function convertClassDecl(node, out) {
         name,
         modifiers: node.Modifiers || [],
         superClass: node.Extends ? typeNodeName(node.Extends) : undefined,
-        interfaces: (node.Implements || []).map(typeNodeName),
+        interfaces: (node.Implements || []).map(javaTypeNodeName),
         fields: irFields,
         methods: irMethods,
         constructors: irConstructors,
@@ -339,12 +355,17 @@ function convertClassToJavaClassDecl(node) {
             field.javaInit = convertExpr(f.Init);
         return field;
     });
+    // Include type parameters in the name
+    let fullName = node.Name || "";
+    const tps = (node.TypeParams || []).map((tp) => tp.Name || tp);
+    if (tps.length > 0)
+        fullName += "<" + tps.join(", ") + ">";
     return {
         kind: "Java_ClassDecl",
-        name: node.Name || "",
+        name: fullName,
         modifiers: node.Modifiers || [],
         superClass: node.Extends ? typeNodeName(node.Extends) : undefined,
-        interfaces: (node.Implements || []).map(typeNodeName),
+        interfaces: (node.Implements || []).map(javaTypeNodeName),
         fields: irFields,
         methods: methods.map(convertMethodDecl),
         constructors: constructors.map(convertConstructorDecl),
@@ -413,7 +434,12 @@ function convertInterfaceDecl(node) {
             });
         }
     }
-    return { kind: "InterfaceDecl", name: node.Name || "", methods, stmtIndex: 0 };
+    // Append type parameters to name (e.g., Validator<T>)
+    let name = node.Name || "";
+    const tps = (node.TypeParams || []).map((tp) => tp.Name || tp);
+    if (tps.length > 0)
+        name += "<" + tps.join(", ") + ">";
+    return { kind: "InterfaceDecl", name, methods, stmtIndex: 0 };
 }
 function convertEnumDecl(node) {
     const members = node.Body || [];
@@ -428,16 +454,25 @@ function convertEnumDecl(node) {
 /** Convert enum to Java_EnumDecl (for AET-Java output). */
 function convertEnumDeclToIR(node) {
     const members = node.Body || [];
+    const enumName = node.Name || "";
     const values = [];
     const fields = [];
     const methods = [];
     const constructors = [];
     for (const m of members) {
-        if (m.Kind === "EnumConstant" || (m.Kind === "VarDecl" && !m.Type)) {
-            // Enum constant
+        // Detect enum constants: VarDecl with type matching enum name, or EnumConstant
+        const isEnumConstant = m.Kind === "EnumConstant" ||
+            (m.Kind === "VarDecl" && !m.Type) ||
+            (m.Kind === "VarDecl" && m.Type?.Kind === "Ident" && m.Type?.Name === enumName &&
+                (m.Modifiers || []).includes("static") && (m.Modifiers || []).includes("final"));
+        if (isEnumConstant) {
+            // Enum constant — extract constructor args if any
+            const args = m.Args || [];
+            // If init is a NewExpr with args, use those
+            const initArgs = m.Init?.Args || [];
             values.push({
                 name: m.Name || "",
-                args: (m.Args || []).map(convertExpr),
+                args: (args.length > 0 ? args : initArgs).map(convertExpr),
             });
         }
         else if (m.Kind === "VarDecl") {
@@ -476,7 +511,7 @@ function convertEnumDeclToIR(node) {
         fields,
         methods,
         constructors,
-        interfaces: (node.Implements || []).map(typeNodeName),
+        interfaces: (node.Implements || []).map(javaTypeNodeName),
         stmtIndex: 0,
     };
 }
@@ -510,16 +545,22 @@ function convertSealedInterfaceDecl(node) {
 }
 /** Convert record declaration to Java_RecordDecl. */
 function convertRecordDecl(node) {
-    const components = (node.Params || node.Components || []).map((p) => ({
+    const members = node.Body || [];
+    // Record components: either explicit Params/Components or VarDecl entries in Body
+    let rawComponents = node.Params || node.Components || [];
+    if (rawComponents.length === 0) {
+        // Extract from Body VarDecl entries (ASTDumper stores record components as VarDecl)
+        rawComponents = members.filter((m) => m.Kind === "VarDecl");
+    }
+    const components = rawComponents.map((p) => ({
         name: p.Name || "_",
         type: mapJavaType(p.Type),
     }));
     // Attach original Java type names for AET-Java output
-    const javaComponents = (node.Params || node.Components || []).map((p) => ({
+    const javaComponents = rawComponents.map((p) => ({
         name: p.Name || "_",
         typeName: javaTypeNodeName(p.Type),
     }));
-    const members = node.Body || [];
     const methods = [];
     for (const m of members) {
         if (m.Kind === "MethodDecl") {
@@ -538,7 +579,7 @@ function convertRecordDecl(node) {
         name: node.Name || "",
         typeParams: (node.TypeParams || []).map((tp) => tp.Name || tp),
         components,
-        interfaces: (node.Implements || []).map(typeNodeName),
+        interfaces: (node.Implements || []).map(javaTypeNodeName),
         methods,
         stmtIndex: 0,
     };
@@ -554,6 +595,11 @@ function convertMethodDecl(node) {
     const results = node.ReturnType ? convertReturnTypes(node.ReturnType) : [];
     const body = convertBlockStmt(node.Body);
     const result = { kind: "FuncDecl", name, params, results, body, stmtIndex: 0 };
+    // Preserve method-level type parameters (e.g., <T> on static <T> void runTest(...))
+    const methodTypeParams = (node.TypeParams || []).map((tp) => tp.Name || tp);
+    if (methodTypeParams.length > 0) {
+        result.typeParams = methodTypeParams;
+    }
     // Preserve Java-specific metadata for AET-Java output
     result.javaModifiers = node.Modifiers || [];
     result.javaReturnTypeName = node.ReturnType ? javaTypeNodeName(node.ReturnType) : "";
@@ -727,25 +773,68 @@ function convertStmt(node) {
             return null;
     }
 }
+/** Convert an IRType to a proper expression tree for use in ArrayTypeExpr. */
+function irTypeToArrayTypeExpr(t) {
+    if (t.isSlice && t.elementType) {
+        return { kind: "ArrayTypeExpr", elt: irTypeToArrayTypeExpr(t.elementType) };
+    }
+    // Get the base type name
+    const baseName = t.name || "_in";
+    return { kind: "Ident", name: baseName };
+}
+/** Recursively patch nested CompositeLit elements to use the correct element type. */
+function patchNestedCompositeLitTypes(lit, eltExpr) {
+    for (const elt of lit.elts) {
+        if (elt.kind === "CompositeLit") {
+            const innerLit = elt;
+            // If inner lit has _in/Object type, patch it to the correct type
+            if (innerLit.type?.kind === "ArrayTypeExpr") {
+                const innerElt = innerLit.type.elt;
+                if (innerElt.kind === "Ident" && innerElt.name === "_in") {
+                    innerLit.type.elt = eltExpr;
+                }
+            }
+        }
+    }
+}
 function convertLocalVarDecl(node) {
     let value = node.Init ? convertExpr(node.Init) : undefined;
     // Fix: if init is a NewArrayExpr without Type info, use the VarDecl's Type
     if (node.Init?.Kind === "NewArrayExpr" && !node.Init.Type && node.Type?.Kind === "ArrayType") {
         const declElemType = mapJavaType(node.Type.ElemType);
+        // Build proper ArrayTypeExpr element from the declared element type
+        const eltExpr = irTypeToArrayTypeExpr(declElemType);
         // Patch the composite literal type
         if (value && value.kind === "CompositeLit" && value.type) {
-            value.type = { kind: "ArrayTypeExpr", elt: { kind: "Ident", name: declElemType.name } };
+            value.type = { kind: "ArrayTypeExpr", elt: eltExpr };
+            // Also patch nested CompositeLit elements (for multi-dimensional arrays)
+            if (declElemType.isSlice && declElemType.elementType) {
+                const innerEltExpr = irTypeToArrayTypeExpr(declElemType.elementType);
+                patchNestedCompositeLitTypes(value, innerEltExpr);
+            }
         }
         // Patch make() call type
         if (value && value.kind === "CallExpr" && value.func.kind === "Ident" && value.func.name === "mk") {
             const makeArgs = value.args;
             if (makeArgs.length > 0 && makeArgs[0].kind === "ArrayTypeExpr") {
-                makeArgs[0].elt = { kind: "Ident", name: declElemType.name };
+                makeArgs[0].elt = eltExpr;
             }
         }
     }
     // If the variable has an initializer, use short declaration
     if (value) {
+        // If the variable type is a parameterized type (e.g., GenericStack<Integer>),
+        // use VarDecl with explicit type to preserve the type info
+        if (node.Type?.Kind === "ParameterizedType" && node.Type.TypeArgs?.length > 0) {
+            const fullType = javaTypeNodeName(node.Type);
+            return {
+                kind: "VarDecl",
+                name: node.Name || "_",
+                type: IR.simpleType(fullType),
+                value,
+                stmtIndex: 0,
+            };
+        }
         return {
             kind: "ShortDeclStmt",
             names: [node.Name || "_"],
@@ -929,6 +1018,69 @@ function convertCaseLabel(node) {
     }
     return convertExpr(node);
 }
+/** Convert switch expression (Java 14+) to Java_SwitchExpr IR node. */
+function convertSwitchExprToIR(node) {
+    const tag = node.Expr ? convertExpr(node.Expr) : { kind: "Ident", name: "_" };
+    const cases = [];
+    for (const c of node.Cases || []) {
+        if (c.Kind !== "CaseClause")
+            continue;
+        let values = null;
+        if (c.Default) {
+            values = null;
+        }
+        else if (c.Labels) {
+            values = c.Labels.map(convertCaseLabel);
+        }
+        // Case body: the ASTDumper stores it as c.Body which can be:
+        // 1. A direct expression node (Ident, BinaryExpr, etc.) for arrow cases
+        // 2. A BlockStmt for block cases
+        // 3. Or c.Stmts for statement-form cases
+        let body;
+        if (c.Body) {
+            if (c.Body.Kind === "BlockStmt") {
+                // Block body (may contain yield)
+                body = convertBlockStmt(c.Body);
+            }
+            else if (c.Body.Kind === "ThrowStmt") {
+                // Throw in switch expression → wrap as block with throw
+                const throwExpr = c.Body.Expr ? convertExpr(c.Body.Expr) : { kind: "Ident", name: "_" };
+                body = {
+                    kind: "BlockStmt",
+                    stmts: [{
+                            kind: "Java_ThrowStmt",
+                            expr: throwExpr,
+                            stmtIndex: 0,
+                        }],
+                };
+            }
+            else {
+                // Direct expression body
+                body = convertExpr(c.Body);
+            }
+        }
+        else if (c.Stmts && c.Stmts.length > 0) {
+            // Statement form
+            if (c.Stmts.length === 1 && c.Stmts[0].Kind === "ExprStmt") {
+                body = convertExpr(c.Stmts[0].Expr);
+            }
+            else if (c.Stmts.length === 1 && c.Stmts[0].Kind === "YieldStmt") {
+                body = convertExpr(c.Stmts[0].Value || c.Stmts[0].Expr);
+            }
+            else {
+                body = convertBlockStmt({ Stmts: c.Stmts });
+            }
+        }
+        else if (c.Expr) {
+            body = convertExpr(c.Expr);
+        }
+        else {
+            body = { kind: "Ident", name: "_" };
+        }
+        cases.push({ values, body });
+    }
+    return { kind: "Java_SwitchExpr", tag, cases };
+}
 function convertTryStmt(node) {
     const body = convertBlockStmt(node.Body);
     const catches = [];
@@ -991,13 +1143,18 @@ function convertExpr(node) {
                 type: mapJavaType(node.Type),
                 expr: convertExpr(node.Expr),
             };
-        case "InstanceOfExpr":
+        case "InstanceOfExpr": {
+            // Pattern binding variable: node.Pattern.Var.Name (JDK 16+ pattern matching)
+            const binding = node.Pattern?.Var?.Name || node.Binding || node.PatternVar || undefined;
+            // Use the pattern type if available (more specific than the instanceof type)
+            const instType = node.Pattern?.Var?.Type || node.Type;
             return {
                 kind: "Java_InstanceofExpr",
                 expr: convertExpr(node.Expr),
-                type: mapJavaType(node.Type),
-                binding: node.Binding || node.PatternVar || undefined,
+                type: mapJavaType(instType),
+                binding,
             };
+        }
         case "TernaryExpr":
             return {
                 kind: "Java_TernaryExpr",
@@ -1024,7 +1181,7 @@ function convertExpr(node) {
         case "PrimitiveType":
             return { kind: "Ident", name: JAVA_TYPE_MAP[node.Name] ?? node.Name };
         case "SwitchExpr":
-            return { kind: "Ident", name: "/* switchExpr */" };
+            return convertSwitchExprToIR(node);
         default:
             return { kind: "Ident", name: node.Name || "_" };
     }
@@ -1053,16 +1210,40 @@ function convertLiteral(node) {
         case "float":
         case "double":
             return { kind: "BasicLit", type: "FLOAT", value };
-        case "char":
-            return { kind: "BasicLit", type: "CHAR", value: `'${value}'` };
+        case "char": {
+            // Escape special characters in char literals
+            const escapedChar = value
+                .replace(/\\/g, "\\\\")
+                .replace(/\n/g, "\\n")
+                .replace(/\r/g, "\\r")
+                .replace(/\t/g, "\\t")
+                .replace(/'/g, "\\'")
+                .replace(/\0/g, "\\0");
+            return { kind: "BasicLit", type: "CHAR", value: `'${escapedChar}'` };
+        }
         case "boolean":
             return { kind: "BasicLit", type: "INT", value }; // true/false as idents
-        case "String":
-            return { kind: "BasicLit", type: "STRING", value: `"${value}"` };
+        case "String": {
+            // Escape special characters in string content for AETJ output
+            const escaped = value
+                .replace(/\\/g, "\\\\") // backslash must be first
+                .replace(/"/g, '\\"') // double quotes
+                .replace(/\n/g, "\\n") // newline
+                .replace(/\r/g, "\\r") // carriage return
+                .replace(/\t/g, "\\t"); // tab
+            return { kind: "BasicLit", type: "STRING", value: `"${escaped}"` };
+        }
         case "null":
             return { kind: "BasicLit", type: "INT", value: "nil" };
-        default:
-            return { kind: "BasicLit", type: "STRING", value: `"${value}"` };
+        default: {
+            const escaped = value
+                .replace(/\\/g, "\\\\")
+                .replace(/"/g, '\\"')
+                .replace(/\n/g, "\\n")
+                .replace(/\r/g, "\\r")
+                .replace(/\t/g, "\\t");
+            return { kind: "BasicLit", type: "STRING", value: `"${escaped}"` };
+        }
     }
 }
 function convertUnaryExpr(node) {
@@ -1100,22 +1281,26 @@ function convertMethodCall(node) {
     }
     // Rename method names that clash with AET parser keywords
     if (method?.Kind === "FieldAccess") {
-        const KEYWORD_METHOD_RENAMES = {
-            "append": "apd",
-            "delete": "del",
-            "copy": "cpy",
-            "new": "nw_",
-            "make": "mk_",
-            "filter": "flt_",
-            "range": "rng_",
-        };
+        const KEYWORD_METHOD_RENAMES = Object.create(null);
+        KEYWORD_METHOD_RENAMES["append"] = "apd";
+        KEYWORD_METHOD_RENAMES["delete"] = "del";
+        KEYWORD_METHOD_RENAMES["copy"] = "cpy";
+        KEYWORD_METHOD_RENAMES["new"] = "nw_";
+        KEYWORD_METHOD_RENAMES["make"] = "mk_";
+        KEYWORD_METHOD_RENAMES["filter"] = "flt_";
+        KEYWORD_METHOD_RENAMES["range"] = "rng_";
         const renamed = KEYWORD_METHOD_RENAMES[method.Name];
         if (renamed) {
             const obj = convertExpr(method.Expr);
             return { kind: "CallExpr", func: { kind: "SelectorExpr", x: obj, sel: renamed }, args };
         }
     }
-    return { kind: "CallExpr", func: convertExpr(method), args };
+    const result = { kind: "CallExpr", func: convertExpr(method), args };
+    // Preserve explicit type arguments (e.g., Map.Entry.<String, Integer>comparingByValue())
+    if (node.TypeArgs && node.TypeArgs.length > 0) {
+        result.javaTypeArgs = node.TypeArgs.map(javaTypeNodeName);
+    }
+    return result;
 }
 /**
  * Flatten a chain like FieldAccess(FieldAccess(Ident("System"), "out"), "println")
@@ -1159,11 +1344,11 @@ function convertNewExpr(node) {
     if (alias) {
         return { kind: "CallExpr", func: { kind: "Ident", name: alias }, args };
     }
-    // Common Java types that map to Go builtins
-    if (typeName === "ArrayList" || typeName === "LinkedList") {
+    // Common Java types that map to Go builtins (only when no args — empty collection init)
+    if ((typeName === "ArrayList" || typeName === "LinkedList") && args.length === 0) {
         return { kind: "CallExpr", func: { kind: "Ident", name: "mk" }, args: [{ kind: "ArrayTypeExpr", elt: { kind: "Ident", name: "_in" } }] };
     }
-    if (typeName === "HashMap" || typeName === "TreeMap" || typeName === "LinkedHashMap") {
+    if (typeName === "HashMap" && args.length === 0) {
         return { kind: "CallExpr", func: { kind: "Ident", name: "mk" }, args: [{ kind: "MapTypeExpr", key: { kind: "Ident", name: "string" }, value: { kind: "Ident", name: "_in" } }] };
     }
     // General new expression → Java_NewExpr
@@ -1477,6 +1662,790 @@ function javaExprToAET(expr) {
         case "Java_TernaryExpr":
             // cond ? a : b → _t(cond, ifTrue, ifFalse) — parsed as regular call, emitter converts to ternary
             return `_t(${javaExprToAET(expr.cond)},${javaExprToAET(expr.ifTrue)},${javaExprToAET(expr.ifFalse)})`;
+        case "Java_SwitchExpr":
+            return "_"; // handled by javaIrToAETJ path
+        default:
+            return "_";
+    }
+}
+// ===========================================================================
+// javaIrToAETJ — convert IR to AET-Java (.aetj) string
+// ===========================================================================
+// Module-level state: parameter names that shadow fields in current constructor body.
+// When non-empty, we are inside a constructor body and must keep `this.` for shadowed names.
+let _ctorParamNames = new Set();
+// Module-level flag: true when emitting inside a method/constructor body.
+// Used to allow VarDecl := syntax (safe for local vars, not for class fields).
+let _inMethodBody = false;
+// Module-level state: known enum type names → set of value names.
+// Used to strip enum qualification (e.g., TokenType.PLUS → PLUS).
+let _knownEnums = new Map();
+/** Recursively collect enum declarations from IR program. */
+function collectEnumDecls(decl) {
+    if (decl.kind === "Java_EnumDecl") {
+        const ed = decl;
+        _knownEnums.set(ed.name, new Set(ed.values.map(v => v.name)));
+    }
+    if (decl.kind === "Java_ClassDecl") {
+        const cd = decl;
+        for (const ic of cd.innerClasses)
+            collectEnumDecls(ic);
+    }
+}
+export function javaIrToAETJ(program) {
+    _ctorParamNames = new Set();
+    _knownEnums = new Map();
+    // Pre-scan to collect all enum declarations
+    for (const decl of program.decls)
+        collectEnumDecls(decl);
+    const parts = ["!java-v1"];
+    for (const decl of program.decls) {
+        const s = aetjNode(decl);
+        if (s)
+            parts.push(s);
+    }
+    return parts.join(";");
+}
+// ---------------------------------------------------------------------------
+// AET-Java modifier helpers
+// ---------------------------------------------------------------------------
+/** Build modifier prefix string from Java modifier list. */
+function aetjModPrefix(mods, context) {
+    let prefix = "";
+    const isStatic = mods.includes("static");
+    const isFinal = mods.includes("final");
+    const isPublic = mods.includes("public");
+    const isPrivate = mods.includes("private");
+    const isProtected = mods.includes("protected");
+    const isAbstract = mods.includes("abstract");
+    if (isStatic)
+        prefix += "$";
+    if (isAbstract)
+        prefix += "abs ";
+    // Access modifiers depend on context defaults:
+    // - fields default to private (omit -)
+    // - methods default to package-private (omit nothing)
+    // - top-level classes are always public (omit +)
+    if (context === "field") {
+        if (isPublic)
+            prefix += "+";
+        else if (isProtected)
+            prefix += "~";
+        // private is default for fields — omit
+    }
+    else if (context === "method") {
+        if (isPublic)
+            prefix += "+";
+        else if (isPrivate)
+            prefix += "-";
+        else if (isProtected)
+            prefix += "~";
+        // package-private is default for methods — omit
+    }
+    if (isFinal)
+        prefix += "!";
+    return prefix;
+}
+/** Strip wildcard type params from type names (AET parser can't handle ? extends/super).
+ *  For types like Class<? extends Exception>, remove the entire type param. */
+function stripWildcards(tn) {
+    // If the type contains a wildcard, remove the entire parameterized part
+    // e.g., Class<? extends Exception> → Class
+    if (tn.includes("?")) {
+        return tn.replace(/<[^>]*\?[^>]*>/g, "");
+    }
+    return tn;
+}
+/** Get the Java type name for a field, using the preserved javaTypeName if available. */
+function aetjFieldTypeName(f) {
+    return stripWildcards(f.javaTypeName || irTypeToJavaName(f.type));
+}
+/** Get Java return type name for a method. */
+function aetjReturnTypeName(m) {
+    const jrt = m.javaReturnTypeName;
+    if (jrt !== undefined)
+        return stripWildcards(jrt);
+    if (m.results.length === 0)
+        return "";
+    return irTypeToJavaName(m.results[0]);
+}
+/** Get Java parameter list string for a method/constructor. */
+function aetjParamList(m) {
+    const javaParams = m.javaParams;
+    if (javaParams && javaParams.length > 0) {
+        return javaParams.map(p => `${stripWildcards(p.typeName)} ${p.name}`).join(",");
+    }
+    // Fallback to IR params
+    return m.params.map(p => {
+        const tn = irTypeToJavaName(p.type);
+        return tn ? `${tn} ${p.name}` : p.name;
+    }).join(",");
+}
+/** Reverse-map a Go-style identifier name back to Java. */
+function aetjReverseMapIdent(name) {
+    const map = {
+        "string": "String",
+        "int64": "long",
+        "float64": "double",
+        "float32": "float",
+        "bool": "boolean",
+        "int16": "short",
+        "rune": "char",
+        "_in": "Object",
+        "error": "Exception",
+        "nil": "null",
+    };
+    return map[name] ?? name;
+}
+/** Convert IR type back to Java type name. */
+function irTypeToJavaName(t) {
+    if (!t)
+        return "Object";
+    // Reverse the JAVA_TYPE_MAP
+    const reverseMap = {
+        "": "void",
+        "int": "int",
+        "int64": "long",
+        "float64": "double",
+        "float32": "float",
+        "bool": "boolean",
+        "byte": "byte",
+        "int16": "short",
+        "rune": "char",
+        "string": "String",
+        "_in": "Object",
+        "error": "Exception",
+    };
+    if (t.isSlice && t.elementType) {
+        return irTypeToJavaName(t.elementType) + "[]";
+    }
+    if (t.isMap && t.keyType && t.valueType) {
+        return `Map<${irTypeToJavaName(t.keyType)},${irTypeToJavaName(t.valueType)}>`;
+    }
+    if (t.isPointer && t.elementType) {
+        return `Optional<${irTypeToJavaName(t.elementType)}>`;
+    }
+    const name = reverseMap[t.name] ?? t.name;
+    return stripWildcards(name);
+}
+// ---------------------------------------------------------------------------
+// AET-Java constructor auto-generation detection
+// ---------------------------------------------------------------------------
+/** Check if a constructor body is ALL `this.x = x` assignments (auto-generatable). */
+function isAutoConstructor(ctor, fields) {
+    const stmts = ctor.body.stmts;
+    if (stmts.length === 0)
+        return false;
+    // Each statement must be `this.x = x` where x matches a param name
+    const paramNames = new Set(ctor.params.map(p => p.name));
+    for (const stmt of stmts) {
+        if (!stmt || stmt.kind !== "AssignStmt")
+            return false;
+        const assign = stmt;
+        if (assign.op !== "=")
+            return false;
+        if (assign.lhs.length !== 1 || assign.rhs.length !== 1)
+            return false;
+        // LHS must be this.x
+        const lhs = assign.lhs[0];
+        if (lhs.kind !== "SelectorExpr")
+            return false;
+        const sel = lhs;
+        if (sel.x.kind !== "Ident" || sel.x.name !== "this")
+            return false;
+        // RHS must be x (matching a param)
+        const rhs = assign.rhs[0];
+        if (rhs.kind !== "Ident")
+            return false;
+        if (!paramNames.has(rhs.name))
+            return false;
+        // sel.sel should match the rhs name
+        if (sel.sel !== rhs.name)
+            return false;
+    }
+    // Number of assignments should match number of params
+    if (stmts.length !== ctor.params.length)
+        return false;
+    // Only auto-generatable if the constructor initializes ALL fields
+    // (otherwise we need to preserve the partial constructor)
+    return ctor.params.length === fields.length;
+}
+// ---------------------------------------------------------------------------
+// AET-Java main method detection
+// ---------------------------------------------------------------------------
+/** Check if a method is the standard `public static void main(String[] args)`. */
+function isMainMethod(m) {
+    if (m.name !== "main")
+        return false;
+    const mods = m.javaModifiers || [];
+    if (!mods.includes("public") || !mods.includes("static"))
+        return false;
+    const retType = aetjReturnTypeName(m);
+    if (retType !== "" && retType !== "void")
+        return false;
+    return true;
+}
+// ---------------------------------------------------------------------------
+// AET-Java node emitter
+// ---------------------------------------------------------------------------
+function aetjNode(node) {
+    switch (node.kind) {
+        case "Java_ClassDecl":
+            return aetjClassDecl(node);
+        case "Java_RecordDecl":
+            return aetjRecordDecl(node);
+        case "Java_EnumDecl":
+            return aetjEnumDecl(node);
+        case "Java_SealedInterfaceDecl":
+            return aetjSealedInterfaceDecl(node);
+        case "FuncDecl": {
+            // Top-level function (from flattened static-only class)
+            return aetjMethodDecl(node);
+        }
+        case "StructDecl":
+            return aetjStructAsClass(node);
+        case "InterfaceDecl":
+            return aetjInterfaceDecl(node);
+        case "TypeAlias":
+            return `@${node.name}=${irTypeToJavaName(node.underlying)}`;
+        case "ReturnStmt":
+            return `^${node.values.map(aetjExpr).join(",")}`;
+        case "IfStmt": {
+            // Strip parentheses from condition (Java AST wraps conditions in parens)
+            const condExpr = node.cond.kind === "ParenExpr" ? node.cond.x : node.cond;
+            let s = `if ${aetjExpr(condExpr)}{${aetjBlock(node.body)}}`;
+            if (node.else_) {
+                if (node.else_.kind === "IfStmt") {
+                    s += `else ${aetjNode(node.else_)}`;
+                }
+                else if (node.else_.kind === "BlockStmt") {
+                    s += `else{${aetjBlock(node.else_)}}`;
+                }
+            }
+            return s;
+        }
+        case "ForStmt": {
+            // while loop: ForStmt with only cond (no init/post)
+            if (node.cond && !node.init && !node.post) {
+                // Strip parentheses from condition (Java AST wraps conditions in parens)
+                const condExpr = node.cond.kind === "ParenExpr" ? node.cond.x : node.cond;
+                return `while ${aetjExpr(condExpr)}{${aetjBlock(node.body)}}`;
+            }
+            // infinite loop: no init, cond, or post
+            if (!node.init && !node.cond && !node.post) {
+                return `for{${aetjBlock(node.body)}}`;
+            }
+            // traditional for loop
+            const init = node.init ? aetjNode(node.init) : "";
+            const cond = node.cond ? aetjExpr(node.cond) : "";
+            const post = node.post ? aetjNode(node.post) : "";
+            return `for(${init};${cond};${post}){${aetjBlock(node.body)}}`;
+        }
+        case "RangeStmt": {
+            // for(item:collection){body} — AET-Java style
+            const varName = node.value || node.key || "_";
+            return `for(${varName}:${aetjExpr(node.x)}){${aetjBlock(node.body)}}`;
+        }
+        case "SwitchStmt": {
+            const tag = node.tag ? ` ${aetjExpr(node.tag)}` : "";
+            const cases = node.cases.map(c => {
+                if (c.values) {
+                    return `${c.values.map(aetjExpr).join(",")}->${c.body.map(aetjNode).join(";")}`;
+                }
+                return `_->${c.body.map(aetjNode).join(";")}`;
+            }).join(";");
+            return `switch${tag}{${cases}}`;
+        }
+        case "ShortDeclStmt":
+            return `${node.names.join(",")}:=${node.values.map(aetjExpr).join(",")}`;
+        case "AssignStmt":
+            return `${node.lhs.map(aetjExpr).join(",")}${node.op}${node.rhs.map(aetjExpr).join(",")}`;
+        case "ExprStmt":
+            return aetjExpr(node.expr);
+        case "IncDecStmt":
+            return `${aetjExpr(node.x)}${node.op}`;
+        case "DeferStmt":
+            return `defer ${aetjExpr(node.call)}`;
+        case "GoStmt":
+            return `go ${aetjExpr(node.call)}`;
+        case "SendStmt":
+            return `${aetjExpr(node.chan)}<-${aetjExpr(node.value)}`;
+        case "BranchStmt":
+            return node.tok;
+        case "VarDecl": {
+            if (node.value) {
+                // Include explicit type annotation when it's a parameterized/generic type (e.g., GenericStack<Integer>)
+                // Format: var name:Type =expr  (space before = to prevent >= tokenization issue)
+                if (node.type && node.type.name && node.type.name.includes("<")) {
+                    return `var ${node.name}:${irTypeToJavaName(node.type)} =${aetjExpr(node.value)}`;
+                }
+                // Inside method bodies: use := (saves 1 token vs 'var name=')
+                if (_inMethodBody) {
+                    return `${node.name}:=${aetjExpr(node.value)}`;
+                }
+                return `var ${node.name}=${aetjExpr(node.value)}`;
+            }
+            // Uninitialized variables
+            const tn = node.type ? irTypeToJavaName(node.type) : "Object";
+            const defaults = Object.create(null);
+            defaults["boolean"] = "false";
+            defaults["int"] = "0";
+            defaults["long"] = "0";
+            defaults["double"] = "0.0";
+            defaults["float"] = "0.0";
+            defaults["char"] = "'\\0'";
+            defaults["byte"] = "0";
+            defaults["short"] = "0";
+            const defaultVal = defaults[tn] || "null";
+            // When type is parameterized (e.g., Node<T>), preserve type annotation
+            if (defaultVal === "null" && tn.includes("<")) {
+                return `var ${node.name}:${tn} =${defaultVal}`;
+            }
+            // Inside method bodies: use := (saves 1 token vs 'var name=')
+            if (_inMethodBody) {
+                return `${node.name}:=${defaultVal}`;
+            }
+            return `var ${node.name}=${defaultVal}`;
+        }
+        case "ConstDecl":
+            return `const(${node.specs.map(s => `${s.name}${s.value ? `=${aetjExpr(s.value)}` : ""}`).join(";")})`;
+        // ---- Java-specific nodes ----
+        case "Java_TryCatch": {
+            let s = `tc{${aetjBlock(node.body)}}`;
+            for (const c of node.catches) {
+                const exType = irTypeToJavaName(c.exceptionType);
+                s += `(${exType} ${c.name}){${aetjBlock(c.body)}}`;
+            }
+            if (node.finallyBody) {
+                s += `!{${aetjBlock(node.finallyBody)}}`;
+            }
+            return s;
+        }
+        case "Java_EnhancedFor": {
+            // for(item:collection){body}
+            return `for(${node.varName}:${aetjExpr(node.iterable)}){${aetjBlock(node.body)}}`;
+        }
+        case "Java_ThrowStmt":
+            return `throw ${aetjExpr(node.expr)}`;
+        case "BlockStmt":
+            return aetjBlock(node);
+        default:
+            return `/* ${node.kind} */`;
+    }
+}
+// ---------------------------------------------------------------------------
+// AET-Java class declaration
+// ---------------------------------------------------------------------------
+function aetjClassDecl(node) {
+    let s = `@${node.name}`;
+    // Inheritance
+    if (node.superClass)
+        s += `:${node.superClass}`;
+    if (node.interfaces.length > 0)
+        s += `[${node.interfaces.join(",")}]`;
+    s += "{";
+    const parts = [];
+    // Fields
+    for (const f of node.fields) {
+        const mods = f.javaModifiers || [];
+        const prefix = aetjModPrefix(mods, "field");
+        const typeName = aetjFieldTypeName(f);
+        let fieldStr = `${prefix}${typeName} ${f.name}`;
+        const init = f.javaInit;
+        if (init) {
+            // If the field type is a collection (ArrayList, HashMap, etc.) and init is mk(...),
+            // emit as "new TypeName<>()" to preserve the collection type through round-trip
+            const collectionTypes = ["ArrayList", "HashMap", "LinkedHashMap", "TreeMap",
+                "HashSet", "LinkedHashSet", "TreeSet", "ArrayDeque", "PriorityQueue",
+                "LinkedList", "ConcurrentHashMap", "StringBuilder"];
+            const baseTypeName = typeName.replace(/<.*>/, "");
+            if (collectionTypes.includes(baseTypeName) && init.kind === "CallExpr" && init.func?.name === "mk") {
+                fieldStr += `=new ${baseTypeName}<>()`;
+            }
+            else {
+                fieldStr += `=${aetjExpr(init)}`;
+            }
+        }
+        parts.push(fieldStr);
+    }
+    // Constructors (omit auto-generatable ones)
+    for (const c of node.constructors) {
+        if (isAutoConstructor(c, node.fields))
+            continue;
+        const paramStr = aetjParamList(c);
+        // Set constructor param names so aetjExpr keeps this.x for shadowed fields
+        _ctorParamNames = new Set(c.params.map(p => p.name));
+        _inMethodBody = true;
+        const bodyStr = aetjBlock(c.body);
+        _inMethodBody = false;
+        _ctorParamNames = new Set();
+        parts.push(`(${paramStr}){${bodyStr}}`);
+    }
+    // Methods
+    for (const m of node.methods) {
+        parts.push(aetjMethodInClass(m));
+    }
+    // Inner classes
+    for (const ic of node.innerClasses) {
+        parts.push(aetjClassDecl(ic));
+    }
+    s += parts.join(";");
+    s += "}";
+    return s;
+}
+/** Emit a method declaration inside a class body (with modifier prefixes). */
+function aetjMethodInClass(m) {
+    const mods = m.javaModifiers || [];
+    // Special: main method
+    if (isMainMethod(m)) {
+        _inMethodBody = true;
+        const bodyStr = aetjBlock(m.body);
+        _inMethodBody = false;
+        return `main(){${bodyStr}}`;
+    }
+    const prefix = aetjModPrefix(mods, "method");
+    const paramStr = aetjParamList(m);
+    const retType = aetjReturnTypeName(m);
+    const retSuffix = retType && retType !== "void" ? `->${retType}` : "";
+    const hasReturnType = !!(retType && retType !== "void");
+    const typeParamsStr = m.typeParams && m.typeParams.length > 0 ? `<${m.typeParams.join(",")}>` : "";
+    _inMethodBody = true;
+    const bodyStr = aetjBlock(m.body, hasReturnType);
+    _inMethodBody = false;
+    return `${prefix}${typeParamsStr}${m.name}(${paramStr})${retSuffix}{${bodyStr}}`;
+}
+/** Emit a top-level method (from flattened static-only class). */
+function aetjMethodDecl(m) {
+    const mods = m.javaModifiers || [];
+    // Special: main method
+    if (isMainMethod(m)) {
+        _inMethodBody = true;
+        const bodyStr = aetjBlock(m.body);
+        _inMethodBody = false;
+        return `main(){${bodyStr}}`;
+    }
+    // For top-level, receiver methods keep the Go-style receiver
+    if (m.receiver) {
+        const prefix = aetjModPrefix(mods, "method");
+        const paramStr = aetjParamList(m);
+        const retType = aetjReturnTypeName(m);
+        const retSuffix = retType && retType !== "void" ? `->${retType}` : "";
+        const hasReturnType = !!(retType && retType !== "void");
+        _inMethodBody = true;
+        const bodyStr = aetjBlock(m.body, hasReturnType);
+        _inMethodBody = false;
+        return `${prefix}${m.receiver.type.name}.${m.name}(${paramStr})${retSuffix}{${bodyStr}}`;
+    }
+    // Top-level functions in flattened classes are always public static;
+    // the emitter adds public static automatically, so omit modifiers.
+    const typeParamsStr = m.typeParams && m.typeParams.length > 0 ? `<${m.typeParams.join(",")}>` : "";
+    const paramStr = aetjParamList(m);
+    const retType = aetjReturnTypeName(m);
+    const retSuffix = retType && retType !== "void" ? `->${retType}` : "";
+    const hasReturnType = !!(retType && retType !== "void");
+    _inMethodBody = true;
+    const bodyStr = aetjBlock(m.body, hasReturnType);
+    _inMethodBody = false;
+    return `${typeParamsStr}${m.name}(${paramStr})${retSuffix}{${bodyStr}}`;
+}
+// ---------------------------------------------------------------------------
+// AET-Java record declaration
+// ---------------------------------------------------------------------------
+function aetjRecordDecl(node) {
+    // @Name(Type field,Type field)[Interface]
+    const javaComps = node.javaComponents || [];
+    const compStr = javaComps.length > 0
+        ? javaComps.map(c => `${c.typeName} ${c.name}`).join(",")
+        : node.components.map(c => `${irTypeToJavaName(c.type)} ${c.name}`).join(",");
+    let s = `@${node.name}`;
+    if (node.typeParams.length > 0)
+        s += `<${node.typeParams.join(",")}>`;
+    s += `(${compStr})`;
+    if (node.interfaces.length > 0)
+        s += `[${node.interfaces.join(",")}]`;
+    // Methods (if any)
+    if (node.methods.length > 0) {
+        s += "{";
+        s += node.methods.map(m => aetjMethodInClass(m)).join(";");
+        s += "}";
+    }
+    return s;
+}
+// ---------------------------------------------------------------------------
+// AET-Java enum declaration
+// ---------------------------------------------------------------------------
+function aetjEnumDecl(node) {
+    // #Name{VALUE1,VALUE2,...}
+    let s = `#${node.name}`;
+    if (node.interfaces.length > 0)
+        s += `[${node.interfaces.join(",")}]`;
+    s += "{";
+    // Enum values
+    const valueParts = node.values.map(v => {
+        if (v.args.length > 0) {
+            return `${v.name}(${v.args.map(aetjExpr).join(",")})`;
+        }
+        return v.name;
+    });
+    s += valueParts.join(",");
+    // Fields, constructors, methods after semicolon
+    const memberParts = [];
+    for (const f of node.fields) {
+        const mods = f.javaModifiers || [];
+        const prefix = aetjModPrefix(mods, "field");
+        const typeName = aetjFieldTypeName(f);
+        let fieldStr = `${prefix}${typeName} ${f.name}`;
+        const init = f.javaInit;
+        if (init)
+            fieldStr += `=${aetjExpr(init)}`;
+        memberParts.push(fieldStr);
+    }
+    for (const c of node.constructors) {
+        const paramStr = aetjParamList(c);
+        // Set constructor param names so aetjExpr keeps this.x for shadowed fields
+        _ctorParamNames = new Set(c.params.map(p => p.name));
+        _inMethodBody = true;
+        const bodyStr = aetjBlock(c.body);
+        _inMethodBody = false;
+        _ctorParamNames = new Set();
+        memberParts.push(`(${paramStr}){${bodyStr}}`);
+    }
+    for (const m of node.methods) {
+        memberParts.push(aetjMethodInClass(m));
+    }
+    if (memberParts.length > 0) {
+        s += ";" + memberParts.join(";");
+    }
+    s += "}";
+    return s;
+}
+// ---------------------------------------------------------------------------
+// AET-Java sealed interface declaration
+// ---------------------------------------------------------------------------
+function aetjSealedInterfaceDecl(node) {
+    // @Name[+Permitted1,Permitted2;method()]
+    let s = `@${node.name}`;
+    if (node.typeParams.length > 0)
+        s += `<${node.typeParams.join(",")}>`;
+    s += "[";
+    // + prefix before permits list
+    s += "+" + node.permits.join(",");
+    // Methods after semicolon
+    if (node.methods.length > 0) {
+        const methodSigs = node.methods.map(m => {
+            const params = m.params.map(p => `${irTypeToJavaName(p.type)} ${p.name}`).join(",");
+            const ret = m.results.length > 0 ? `->${irTypeToJavaName(m.results[0])}` : "";
+            return `${m.name}(${params})${ret}`;
+        });
+        s += ";" + methodSigs.join(";");
+    }
+    s += "]";
+    return s;
+}
+// ---------------------------------------------------------------------------
+// AET-Java struct-as-class (for IRStructDecl that came from data classes)
+// ---------------------------------------------------------------------------
+function aetjStructAsClass(node) {
+    // Emit as a class with fields
+    let s = `@${node.name}{`;
+    s += node.fields.map(f => {
+        const typeName = aetjFieldTypeName(f);
+        return `!${typeName} ${f.name}`;
+    }).join(";");
+    s += "}";
+    return s;
+}
+// ---------------------------------------------------------------------------
+// AET-Java interface declaration
+// ---------------------------------------------------------------------------
+function aetjInterfaceDecl(node) {
+    const methodSigs = node.methods.map(m => {
+        const params = m.params.map(p => `${irTypeToJavaName(p.type)} ${p.name}`).join(",");
+        const ret = m.results.length > 0 ? `->${irTypeToJavaName(m.results[0])}` : "";
+        return `${m.name}(${params})${ret}`;
+    });
+    return `@${node.name}[${methodSigs.join(";")}]`;
+}
+// ---------------------------------------------------------------------------
+// AET-Java block helper
+// ---------------------------------------------------------------------------
+function aetjBlock(block, implicitReturn = false) {
+    if (!implicitReturn || block.stmts.length === 0) {
+        return block.stmts.map(aetjNode).join(";");
+    }
+    // Emit all but last normally, then emit last with implicit return (no ^)
+    const parts = block.stmts.slice(0, -1).map(aetjNode);
+    const last = block.stmts[block.stmts.length - 1];
+    if (last.kind === "ReturnStmt" && last.values.length > 0) {
+        // Omit the ^ prefix — just emit the expression
+        parts.push(last.values.map(aetjExpr).join(","));
+    }
+    else {
+        parts.push(aetjNode(last));
+    }
+    return parts.join(";");
+}
+// ---------------------------------------------------------------------------
+// AET-Java expression emitter
+// ---------------------------------------------------------------------------
+function aetjExpr(expr) {
+    switch (expr.kind) {
+        case "Ident": {
+            // Reverse-map nil -> null for AET-Java
+            if (expr.name === "nil")
+                return "null";
+            return expr.name;
+        }
+        case "BasicLit":
+            return expr.value;
+        case "CompositeLit": {
+            const typeStr = expr.type ? aetjExpr(expr.type) : "";
+            // Array composite literals need 'new' keyword for the parser: new int[]{1,2,3}
+            const prefix = typeStr ? "new " : "";
+            return `${prefix}${typeStr}{${expr.elts.map(aetjExpr).join(",")}}`;
+        }
+        case "BinaryExpr":
+            return `${aetjExpr(expr.left)}${expr.op}${aetjExpr(expr.right)}`;
+        case "UnaryExpr":
+            return `${expr.op}${aetjExpr(expr.x)}`;
+        case "CallExpr": {
+            // Convert mk(Type[], size...) → new BaseType[size1][size2]... for parseable AET-Java
+            if (expr.func.kind === "Ident" && expr.func.name === "mk" && expr.args.length >= 1) {
+                const firstArg = expr.args[0];
+                if (firstArg.kind === "ArrayTypeExpr") {
+                    // Unwrap nested ArrayTypeExpr to find base type and count dimensions
+                    let baseExpr = firstArg;
+                    let dimCount = 0;
+                    while (baseExpr.kind === "ArrayTypeExpr") {
+                        dimCount++;
+                        baseExpr = baseExpr.elt;
+                    }
+                    const baseStr = baseExpr.kind === "Ident"
+                        ? aetjReverseMapIdent(baseExpr.name)
+                        : aetjExpr(baseExpr);
+                    // When element type is _in/Object (came from diamond ArrayList<>()), emit new ArrayList<>()
+                    // This distinguishes List creation from array creation (e.g., new String[0])
+                    const dimSizes = expr.args.slice(1);
+                    const isZeroSize = dimSizes.length === 0 ||
+                        (dimSizes.length === 1 && dimSizes[0].kind === "BasicLit" && dimSizes[0].value === "0");
+                    if (dimCount === 1 && isZeroSize && (baseStr === "Object" || baseStr === "_in")) {
+                        return `new ArrayList<>()`;
+                    }
+                    // If no sizes at all, use default 0 for first dimension
+                    if (dimSizes.length === 0) {
+                        dimSizes.push({ kind: "BasicLit", type: "INT", value: "0" });
+                    }
+                    let result = `new ${baseStr}`;
+                    for (let d = 0; d < dimCount; d++) {
+                        if (d < dimSizes.length) {
+                            result += `[${aetjExpr(dimSizes[d])}]`;
+                        }
+                        else {
+                            result += `[]`;
+                        }
+                    }
+                    return result;
+                }
+                if (firstArg.kind === "MapTypeExpr") {
+                    // mk(Map<K,V>) → new HashMap<>() (use diamond for type inference)
+                    return `new HashMap<>()`;
+                }
+            }
+            // Preserve "nil" as function name (it's a Java method, not the Go null keyword)
+            const funcStr = (expr.func.kind === "Ident" && expr.func.name === "nil")
+                ? "nil"
+                : aetjExpr(expr.func);
+            return `${funcStr}(${expr.args.map(aetjExpr).join(",")})`;
+        }
+        case "SelectorExpr": {
+            // Strip this. prefix when safe (field not shadowed by constructor param)
+            if (expr.x.kind === "Ident" && expr.x.name === "this") {
+                // In constructor body: keep this. only if field name matches a parameter
+                if (_ctorParamNames.size === 0 || !_ctorParamNames.has(expr.sel)) {
+                    return expr.sel;
+                }
+            }
+            // Strip enum qualification: TokenType.PLUS → PLUS
+            if (expr.x.kind === "Ident") {
+                const lhs = expr.x.name;
+                const enumVals = _knownEnums.get(lhs);
+                if (enumVals && enumVals.has(expr.sel)) {
+                    return expr.sel;
+                }
+            }
+            return `${aetjExpr(expr.x)}.${expr.sel}`;
+        }
+        case "IndexExpr":
+            return `${aetjExpr(expr.x)}[${aetjExpr(expr.index)}]`;
+        case "SliceExpr":
+            return `${aetjExpr(expr.x)}[${expr.low ? aetjExpr(expr.low) : ""}:${expr.high ? aetjExpr(expr.high) : ""}]`;
+        case "StarExpr":
+            return `*${aetjExpr(expr.x)}`;
+        case "UnaryRecvExpr":
+            return `<-${aetjExpr(expr.x)}`;
+        case "ParenExpr":
+            return `(${aetjExpr(expr.x)})`;
+        case "KeyValueExpr":
+            return `${aetjExpr(expr.key)}:${aetjExpr(expr.value)}`;
+        case "FuncLit":
+            return `{${expr.params.map(p => p.name).join(",")}|${aetjBlock(expr.body)}}`;
+        case "TypeAssertExpr":
+            return `${aetjExpr(expr.x)}.(${irTypeToJavaName(expr.type)})`;
+        case "MapTypeExpr":
+            return `Map<${aetjExpr(expr.key)},${aetjExpr(expr.value)}>`;
+        case "ArrayTypeExpr": {
+            // In AET-Java, arrays use Java-order: Type[] not []Type
+            const eltStr = expr.elt.kind === "Ident"
+                ? aetjReverseMapIdent(expr.elt.name)
+                : aetjExpr(expr.elt);
+            return `${eltStr}[]`;
+        }
+        case "ErrorPropExpr":
+            return `${aetjExpr(expr.x)}?${expr.wrap ? `!"${expr.wrap}"` : ""}`;
+        case "PipeExpr":
+            return `${aetjExpr(expr.x)}|${expr.op}(${aetjExpr(expr.fn)})`;
+        // ---- Java-specific expressions ----
+        case "Java_NewExpr":
+            // new Type(args) → Type(args)  (omit new)
+            return `${irTypeToJavaName(expr.type)}(${expr.args.map(aetjExpr).join(",")})`;
+        case "Java_LambdaExpr": {
+            // Lambda → {params|body}
+            const paramNames = expr.params.map(p => p.name).join(",");
+            if ("kind" in expr.body && expr.body.kind === "BlockStmt") {
+                return `{${paramNames}|${aetjBlock(expr.body)}}`;
+            }
+            // Single expression body
+            return `{${paramNames}|${aetjExpr(expr.body)}}`;
+        }
+        case "Java_InstanceofExpr": {
+            // expr is Type [name]
+            const binding = expr.binding ? ` ${expr.binding}` : "";
+            return `${aetjExpr(expr.expr)} is ${irTypeToJavaName(expr.type)}${binding}`;
+        }
+        case "Java_CastExpr":
+            // (Type)expr — kept as-is
+            return `(${irTypeToJavaName(expr.type)})${aetjExpr(expr.expr)}`;
+        case "Java_TernaryExpr":
+            // cond?trueExpr:falseExpr
+            return `${aetjExpr(expr.cond)}?${aetjExpr(expr.ifTrue)}:${aetjExpr(expr.ifFalse)}`;
+        case "Java_SwitchExpr": {
+            // switch expr{VAL->result;VAL->result;_->default}
+            // Strip parentheses from tag (Java AST wraps switch expr in parens)
+            const tagExpr = expr.tag.kind === "ParenExpr" ? expr.tag.x : expr.tag;
+            const tag = aetjExpr(tagExpr);
+            const cases = expr.cases.map(c => {
+                const label = c.values ? c.values.map(aetjExpr).join(",") : "_";
+                let body;
+                if ("kind" in c.body && c.body.kind === "BlockStmt") {
+                    body = `{${aetjBlock(c.body)}}`;
+                }
+                else {
+                    body = aetjExpr(c.body);
+                }
+                return `${label}->${body}`;
+            }).join(";");
+            return `switch ${tag}{${cases}}`;
+        }
         default:
             return "_";
     }

@@ -1,5 +1,5 @@
-export type IRNode = IRProgram | IRFuncDecl | IRStructDecl | IRInterfaceDecl | IRTypeAlias | IRBlockStmt | IRIfStmt | IRForStmt | IRRangeStmt | IRSwitchStmt | IRCaseClause | IRSelectStmt | IRCommClause | IRReturnStmt | IRDeferStmt | IRGoStmt | IRAssignStmt | IRShortDeclStmt | IRExprStmt | IRIncDecStmt | IRSendStmt | IRBranchStmt | IRVarDecl | IRConstDecl | Java_ClassDecl | Java_TryCatch | Java_EnhancedFor | Java_ThrowStmt | Java_RecordDecl | Java_EnumDecl | Java_SealedInterfaceDecl;
-export type IRExpr = IRIdent | IRBasicLit | IRCompositeLit | IRFuncLit | IRBinaryExpr | IRUnaryExpr | IRCallExpr | IRSelectorExpr | IRIndexExpr | IRSliceExpr | IRTypeAssertExpr | IRStarExpr | IRUnaryRecvExpr | IRKeyValueExpr | IRParenExpr | IRErrorPropExpr | IRPipeExpr | IRMapTypeExpr | IRArrayTypeExpr | IRChanTypeExpr | IRFuncTypeExpr | IRInterfaceTypeExpr | IRStructTypeExpr | IRRawGoExpr | Java_NewExpr | Java_LambdaExpr | Java_InstanceofExpr | Java_CastExpr | Java_TernaryExpr | Java_SwitchExpr;
+export type IRNode = IRProgram | IRFuncDecl | IRStructDecl | IRInterfaceDecl | IRTypeAlias | IRBlockStmt | IRIfStmt | IRForStmt | IRRangeStmt | IRSwitchStmt | IRCaseClause | IRSelectStmt | IRCommClause | IRReturnStmt | IRDeferStmt | IRGoStmt | IRAssignStmt | IRShortDeclStmt | IRExprStmt | IRIncDecStmt | IRSendStmt | IRBranchStmt | IRVarDecl | IRConstDecl | Java_ClassDecl | Java_TryCatch | Java_EnhancedFor | Java_ThrowStmt | Java_RecordDecl | Java_EnumDecl | Java_SealedInterfaceDecl | Py_ClassDecl | Py_TryExcept | Py_WithStmt | Py_MatchStmt | Py_RaiseStmt | Py_AssertStmt | Py_DeleteStmt | Py_GlobalStmt | Py_NonlocalStmt | Py_ForElse | Py_WhileElse;
+export type IRExpr = IRIdent | IRBasicLit | IRCompositeLit | IRFuncLit | IRBinaryExpr | IRUnaryExpr | IRCallExpr | IRSelectorExpr | IRIndexExpr | IRSliceExpr | IRTypeAssertExpr | IRStarExpr | IRUnaryRecvExpr | IRKeyValueExpr | IRParenExpr | IRErrorPropExpr | IRPipeExpr | IRMapTypeExpr | IRArrayTypeExpr | IRChanTypeExpr | IRFuncTypeExpr | IRInterfaceTypeExpr | IRStructTypeExpr | IRRawGoExpr | Java_NewExpr | Java_LambdaExpr | Java_InstanceofExpr | Java_CastExpr | Java_TernaryExpr | Java_SwitchExpr | Py_LambdaExpr | Py_ComprehensionExpr | Py_FStringExpr | Py_TernaryExpr | Py_StarExpr | Py_YieldExpr | Py_YieldFromExpr | Py_AwaitExpr | Py_WalrusExpr | Py_DictExpr | Py_SetExpr | Py_TupleExpr;
 export type IRType = {
     name: string;
     isPointer?: boolean;
@@ -29,6 +29,7 @@ export interface IRFuncDecl {
         type: IRType;
         pointer: boolean;
     };
+    typeParams?: string[];
     params: IRParam[];
     results: IRType[];
     body: IRBlockStmt;
@@ -411,3 +412,190 @@ export interface Java_SwitchExprCase {
     values: IRExpr[] | null;
     body: IRExpr | IRBlockStmt;
 }
+export interface Py_ClassDecl {
+    kind: "Py_ClassDecl";
+    name: string;
+    bases: IRExpr[];
+    keywords: {
+        key: string;
+        value: IRExpr;
+    }[];
+    decorators: Py_Decorator[];
+    body: (IRNode | IRExprStmt)[];
+    stmtIndex: number;
+}
+export interface Py_Decorator {
+    expr: IRExpr;
+}
+export interface Py_FuncDecl {
+    kind: "FuncDecl";
+    name: string;
+    isAsync: boolean;
+    params: Py_ParamList;
+    returnType?: string;
+    decorators: Py_Decorator[];
+    body: IRBlockStmt;
+    stmtIndex: number;
+}
+export interface Py_ParamList {
+    params: Py_Param[];
+    vararg?: Py_Param;
+    kwarg?: Py_Param;
+    kwonly?: Py_Param[];
+    posonly?: Py_Param[];
+}
+export interface Py_Param {
+    name: string;
+    type?: string;
+    default_?: IRExpr;
+}
+export interface Py_TryExcept {
+    kind: "Py_TryExcept";
+    body: IRBlockStmt;
+    handlers: Py_ExceptHandler[];
+    elseBody?: IRBlockStmt;
+    finallyBody?: IRBlockStmt;
+    stmtIndex: number;
+}
+export interface Py_ExceptHandler {
+    type?: IRExpr;
+    name?: string;
+    body: IRBlockStmt;
+}
+export interface Py_WithStmt {
+    kind: "Py_WithStmt";
+    isAsync: boolean;
+    items: Py_WithItem[];
+    body: IRBlockStmt;
+    stmtIndex: number;
+}
+export interface Py_WithItem {
+    contextExpr: IRExpr;
+    optionalVar?: string;
+}
+export interface Py_MatchStmt {
+    kind: "Py_MatchStmt";
+    subject: IRExpr;
+    cases: Py_MatchCase[];
+    stmtIndex: number;
+}
+export interface Py_MatchCase {
+    pattern: IRExpr;
+    guard?: IRExpr;
+    body: IRBlockStmt;
+}
+export interface Py_RaiseStmt {
+    kind: "Py_RaiseStmt";
+    exc?: IRExpr;
+    cause?: IRExpr;
+    stmtIndex: number;
+}
+export interface Py_AssertStmt {
+    kind: "Py_AssertStmt";
+    test: IRExpr;
+    msg?: IRExpr;
+    stmtIndex: number;
+}
+export interface Py_DeleteStmt {
+    kind: "Py_DeleteStmt";
+    targets: IRExpr[];
+    stmtIndex: number;
+}
+export interface Py_GlobalStmt {
+    kind: "Py_GlobalStmt";
+    names: string[];
+    stmtIndex: number;
+}
+export interface Py_NonlocalStmt {
+    kind: "Py_NonlocalStmt";
+    names: string[];
+    stmtIndex: number;
+}
+export interface Py_ForElse {
+    kind: "Py_ForElse";
+    isAsync: boolean;
+    target: IRExpr;
+    iter: IRExpr;
+    body: IRBlockStmt;
+    elseBody: IRBlockStmt;
+    stmtIndex: number;
+}
+export interface Py_WhileElse {
+    kind: "Py_WhileElse";
+    cond: IRExpr;
+    body: IRBlockStmt;
+    elseBody: IRBlockStmt;
+    stmtIndex: number;
+}
+export interface Py_LambdaExpr {
+    kind: "Py_LambdaExpr";
+    params: Py_Param[];
+    body: IRExpr;
+}
+export interface Py_ComprehensionExpr {
+    kind: "Py_ComprehensionExpr";
+    type: "list" | "dict" | "set" | "generator";
+    elt: IRExpr;
+    keyExpr?: IRExpr;
+    generators: Py_Comprehension[];
+}
+export interface Py_Comprehension {
+    target: IRExpr;
+    iter: IRExpr;
+    ifs: IRExpr[];
+    isAsync: boolean;
+}
+export interface Py_FStringExpr {
+    kind: "Py_FStringExpr";
+    parts: (string | {
+        expr: IRExpr;
+        conversion?: string;
+        formatSpec?: string;
+    })[];
+}
+export interface Py_TernaryExpr {
+    kind: "Py_TernaryExpr";
+    value: IRExpr;
+    test: IRExpr;
+    orElse: IRExpr;
+}
+export interface Py_StarExpr {
+    kind: "Py_StarExpr";
+    value: IRExpr;
+    isDouble: boolean;
+}
+export interface Py_YieldExpr {
+    kind: "Py_YieldExpr";
+    value?: IRExpr;
+}
+export interface Py_YieldFromExpr {
+    kind: "Py_YieldFromExpr";
+    value: IRExpr;
+}
+export interface Py_AwaitExpr {
+    kind: "Py_AwaitExpr";
+    value: IRExpr;
+}
+export interface Py_WalrusExpr {
+    kind: "Py_WalrusExpr";
+    target: string;
+    value: IRExpr;
+}
+export interface Py_DictExpr {
+    kind: "Py_DictExpr";
+    keys: (IRExpr | null)[];
+    values: IRExpr[];
+}
+export interface Py_SetExpr {
+    kind: "Py_SetExpr";
+    elts: IRExpr[];
+}
+export interface Py_TupleExpr {
+    kind: "Py_TupleExpr";
+    elts: IRExpr[];
+}
+export interface Py_SlotsDecl {
+    names: string[];
+}
+export declare const PY_MAGIC_METHODS: Record<string, string>;
+export declare const PY_MAGIC_REVERSE: Record<string, string>;

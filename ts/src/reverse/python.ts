@@ -1819,8 +1819,8 @@ function pyExprToAETP(expr: IR.IRExpr): string {
       const x = pyExprToAETP(expr.x);
       // self.attr → .attr
       if (x === "self") return `.${expr.sel}`;
-      // cls.attr → @.attr
-      if (x === "cls") return `@.${expr.sel}`;
+      // cls.attr → keep as cls.attr (@ prefix conflicts with decorators)
+      // The emitter will handle cls restoration for classmethods
       return `${x}.${expr.sel}`;
     }
 

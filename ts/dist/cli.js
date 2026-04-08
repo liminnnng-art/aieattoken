@@ -6,12 +6,18 @@ import { resolve, dirname, basename, extname } from "path";
 import { execSync } from "child_process";
 import { fileURLToPath } from "url";
 import { parse } from "./parser/index.js";
+import { parseJava as parseJavaAET } from "./parser/java.js";
+import { parsePython as parsePythonAET } from "./parser/python.js";
 import { transform, loadAliases } from "./transformer/index.js";
+import { transformJava, loadJavaAliases } from "./transformer/java.js";
+import { transformPython, loadPythonAliases } from "./transformer/python.js";
 import { emit } from "./emitter/index.js";
 import { emit as emitJava } from "./emitter/java.js";
+import { emitPython } from "./emitter/python.js";
 import { astDiff, formatDiff } from "./ast-diff/index.js";
 import { parseGoFile, goAstToIR, irToAET, loadReverseAliases } from "./reverse/index.js";
-import { parseJavaFile, javaAstToIR, javaIrToAET, loadJavaReverseAliases } from "./reverse/java.js";
+import { parseJavaFile, javaAstToIR, javaIrToAET, javaIrToAETJ, loadJavaReverseAliases } from "./reverse/java.js";
+import { parsePythonFile, pythonAstToIR, pythonIrToAETP, loadPythonReverseAliases } from "./reverse/python.js";
 // Resolve paths relative to this package (works for global npm install)
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -34,6 +40,22 @@ function findJavaAliases() {
     ];
     return candidates.find(p => existsSync(p));
 }
+function findPythonAliases() {
+    const candidates = [
+        resolve(projectRoot, "stdlib-aliases-python.json"),
+        resolve(pkgRoot, "stdlib-aliases-python.json"),
+        resolve(process.cwd(), "stdlib-aliases-python.json"),
+    ];
+    return candidates.find(p => existsSync(p));
+}
+function findPopularPythonAliases() {
+    const candidates = [
+        resolve(projectRoot, "popular-aliases-python.json"),
+        resolve(pkgRoot, "popular-aliases-python.json"),
+        resolve(process.cwd(), "popular-aliases-python.json"),
+    ];
+    return candidates.find(p => existsSync(p));
+}
 // Find go-parser binary
 function findGoParser() {
     const candidates = [
@@ -53,27 +75,35 @@ if (aliasPath) {
 const javaAliasPath = findJavaAliases();
 if (javaAliasPath) {
     loadJavaReverseAliases(javaAliasPath);
+    loadJavaAliases(javaAliasPath);
+}
+const pythonAliasPath = findPythonAliases();
+if (pythonAliasPath) {
+    loadPythonAliases(pythonAliasPath);
+    loadPythonReverseAliases(pythonAliasPath);
 }
 const args = process.argv.slice(2);
 const command = args[0];
 const VERSION = "0.2.0";
 function usage() {
-    console.log(`aieattoken v${VERSION} — Compress Go/Java code for AI token efficiency
+    console.log(`aieattoken v${VERSION} — Compress Go/Java/Python code for AI token efficiency
 
 Usage:
-  aet convert <file.go|.java>        Go/Java → AET (saves to .aet file)
-  aet convert <file> -o <out>        Go/Java → AET (custom output path)
+  aet convert <file.go|.java|.py>    Go/Java/Python → AET/AETJ/AETP (auto-detect)
+  aet convert <file> -o <out>        Go/Java/Python → AET/AETJ/AETP (custom output)
   aet build <file.aet>               AET → Go → compile (produces binary)
   aet build <file.aet> -o <out>      AET → Go → compile (custom binary name)
-  aet stats <file.go|.java>          Show token savings analysis
+  aet stats <file.go|.java|.py>      Show token savings analysis
   aet watch <dir>                    Watch directory, auto-convert .go/.java → .aet
-  aet compile <file.aet>             AET → Go source (stdout, default)
+  aet compile <file.aet|.aetj|.aetp> AET → Go, AETJ → Java, AETP → Python (stdout)
   aet compile <file.aet> --java      AET → Java source (stdout)
-  aet compile <file.aet> -o <out>    AET → source (file)
-  aet diff <f1.aet> <f2.aet>        AST diff between two AET files
+  aet compile <file.aetp> --typed    AETP → Python with type hints
+  aet compile <file.aet|.aetj|.aetp> -o f  Write compiled output to file
+  aet diff <f1.aet|.aetp> <f2>      AST diff between two AET files
 
 Options:
   --java                             Target Java output (for compile command)
+  --typed                            Emit Python type annotations (for .aetp compile)
   --version, -v                      Show version
   --help, -h                         Show this help`);
 }
@@ -128,18 +158,22 @@ function cmdConvert() {
         aet = convertGoToAET(absPath, sourceCode);
     }
     else if (ext === ".java") {
-        aet = convertJavaToAET(absPath, sourceCode);
+        aet = convertJavaToAETJ(absPath, sourceCode);
+    }
+    else if (ext === ".py") {
+        aet = convertPythonToAETP(absPath, sourceCode);
     }
     else {
-        console.error(`Unsupported file type: ${ext} (expected .go or .java)`);
+        console.error(`Unsupported file type: ${ext} (expected .go, .java, or .py)`);
         process.exit(1);
     }
     if (!aet)
         process.exit(1);
     const outIdx = args.indexOf("-o");
+    const defaultExt = ext === ".java" ? ".aetj" : ext === ".py" ? ".aetp" : ".aet";
     const outPath = outIdx !== -1 && args[outIdx + 1]
         ? resolve(args[outIdx + 1])
-        : absPath.replace(/\.(go|java)$/, ".aet");
+        : absPath.replace(/\.(go|java|py)$/, defaultExt);
     writeFileSync(outPath, aet);
     console.log(`Converted: ${basename(absPath)} → ${basename(outPath)}`);
     // Show token stats
@@ -197,10 +231,13 @@ function cmdStats() {
     const ext = extname(absPath).toLowerCase();
     const sourceCode = readFileSync(absPath, "utf-8");
     const srcTokens = countTokensSync(sourceCode);
-    // Convert to AET
+    // Convert to AET/AETJ/AETP
     let aet;
     if (ext === ".java") {
-        aet = convertJavaToAET(absPath, sourceCode);
+        aet = convertJavaToAETJ(absPath, sourceCode);
+    }
+    else if (ext === ".py") {
+        aet = convertPythonToAETP(absPath, sourceCode);
     }
     else {
         aet = convertGoToAET(absPath, sourceCode);
@@ -210,7 +247,7 @@ function cmdStats() {
         process.exit(1);
     }
     const aetTokens = countTokensSync(aet);
-    const lang = ext === ".java" ? "Java" : "Go";
+    const lang = ext === ".java" ? "Java" : ext === ".py" ? "Python" : "Go";
     const savings = ((1 - aetTokens / srcTokens) * 100).toFixed(1);
     const saved = srcTokens - aetTokens;
     // Display stats
@@ -268,22 +305,50 @@ function cmdWatch() {
 function cmdCompile() {
     const file = args[1];
     if (!file) {
-        console.error("Usage: aet compile <file.aet> [--java]");
+        console.error("Usage: aet compile <file.aet|.aetj|.aetp> [--java] [--typed]");
         process.exit(1);
     }
     const code = readFileSync(resolve(file), "utf-8");
-    const targetJava = args.includes("--java");
-    const ir = compileToIR(code);
-    if (ir.error) {
-        console.error(ir.error);
-        process.exit(1);
-    }
+    const ext = extname(file).toLowerCase();
+    const isAETJ = ext === ".aetj" || code.startsWith("!java-v");
+    const isAETP = ext === ".aetp" || code.startsWith("!py-v");
+    const targetJava = args.includes("--java") || isAETJ;
+    const targetTyped = args.includes("--typed");
     let output;
-    if (targetJava) {
+    if (isAETP) {
+        // AET-Python → Python
+        const ir = compileAETPToIR(code);
+        if (ir.error) {
+            console.error(ir.error);
+            process.exit(1);
+        }
+        output = emitPython(ir.ir, { typed: targetTyped });
+    }
+    else if (isAETJ) {
+        const ir = compileAETJToIR(code);
+        if (ir.error) {
+            console.error(ir.error);
+            process.exit(1);
+        }
+        const baseExt = ".aetj";
+        const className = basename(file, baseExt).replace(/^\w/, c => c.toUpperCase());
+        output = emitJava(ir.ir, { className });
+    }
+    else if (targetJava) {
+        const ir = compileToIR(code);
+        if (ir.error) {
+            console.error(ir.error);
+            process.exit(1);
+        }
         const className = basename(file, ".aet").replace(/^\w/, c => c.toUpperCase());
         output = emitJava(ir.ir, { className });
     }
     else {
+        const ir = compileToIR(code);
+        if (ir.error) {
+            console.error(ir.error);
+            process.exit(1);
+        }
         output = emit(ir.ir);
     }
     const outIdx = args.indexOf("-o");
@@ -299,13 +364,13 @@ function cmdDiff() {
     const file1 = args[1];
     const file2 = args[2];
     if (!file1 || !file2) {
-        console.error("Usage: aet diff <f1.aet> <f2.aet>");
+        console.error("Usage: aet diff <f1.aet|.aetp|.aetj> <f2>");
         process.exit(1);
     }
     const code1 = readFileSync(resolve(file1), "utf-8");
     const code2 = readFileSync(resolve(file2), "utf-8");
-    const ir1 = compileToIR(code1);
-    const ir2 = compileToIR(code2);
+    const ir1 = fileToIR(file1, code1);
+    const ir2 = fileToIR(file2, code2);
     if (ir1.error) {
         console.error(`File 1: ${ir1.error}`);
         process.exit(1);
@@ -317,6 +382,14 @@ function cmdDiff() {
     const diff = astDiff(ir1.ir, ir2.ir);
     console.log(formatDiff(diff));
     process.exit(diff.equal ? 0 : 1);
+}
+function fileToIR(file, code) {
+    const ext = extname(file).toLowerCase();
+    if (ext === ".aetp" || code.startsWith("!py-v"))
+        return compileAETPToIR(code);
+    if (ext === ".aetj" || code.startsWith("!java-v"))
+        return compileAETJToIR(code);
+    return compileToIR(code);
 }
 // ============= CORE FUNCTIONS =============
 function convertGoToAET(goFilePath, goCode) {
@@ -352,6 +425,57 @@ function convertJavaToAET(javaFilePath, javaCode) {
         return null;
     }
 }
+function convertJavaToAETJ(javaFilePath, javaCode) {
+    try {
+        const javaAst = parseJavaFile(javaFilePath);
+        const ir = javaAstToIR(javaAst);
+        return javaIrToAETJ(ir);
+    }
+    catch (e) {
+        if (e.message?.includes("Failed to parse") || e.message?.includes("ASTDumper")) {
+            console.error("Error: Java parser not found. Run 'cd java-parser && javac ASTDumper.java' first.");
+            console.error("  Requires JDK 17+.");
+        }
+        else {
+            console.error(`Java→AETJ conversion error: ${e.message}`);
+        }
+        return null;
+    }
+}
+function compileAETJToIR(code) {
+    const parseResult = parseJavaAET(code);
+    if (parseResult.errors.length > 0) {
+        return { error: `AETJ parse error: ${parseResult.errors.join("; ")}` };
+    }
+    if (!parseResult.cst)
+        return { error: "No CST produced" };
+    return { ir: transformJava(parseResult.cst) };
+}
+function compileAETPToIR(code) {
+    const parseResult = parsePythonAET(code);
+    if (parseResult.errors.length > 0) {
+        return { error: `AETP parse error: ${parseResult.errors.join("; ")}` };
+    }
+    if (!parseResult.cst)
+        return { error: "No CST produced" };
+    return { ir: transformPython(parseResult.cst) };
+}
+function convertPythonToAETP(pyFilePath, _pyCode) {
+    try {
+        const pyAst = parsePythonFile(pyFilePath);
+        const ir = pythonAstToIR(pyAst);
+        return pythonIrToAETP(ir);
+    }
+    catch (e) {
+        if (e.message?.includes("Failed to parse") || e.message?.includes("ast_dumper")) {
+            console.error("Error: Python parser not found. Ensure Python 3.10+ is installed and ast_dumper.py is present.");
+        }
+        else {
+            console.error(`Python conversion error: ${e.message}`);
+        }
+        return null;
+    }
+}
 function compileAET(code) {
     const ir = compileToIR(code);
     if (ir.error)
@@ -376,4 +500,4 @@ function compileToIR(code) {
 // Token counting — imported from isolated module
 import { countTokens as countTokensSync } from "./utils/tokencount.js";
 // Export for programmatic use
-export { compileAET, compileAETToJava, compileToIR, convertGoToAET, convertJavaToAET };
+export { compileAET, compileAETToJava, compileToIR, compileAETJToIR, compileAETPToIR, convertGoToAET, convertJavaToAET, convertJavaToAETJ, convertPythonToAETP };

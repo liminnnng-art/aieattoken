@@ -32,6 +32,20 @@ const STDLIB_ALIASES = {
     Oe: { java: "Optional.empty", pkg: "java.util.Optional", import: "java.util.Optional" },
     Oo: { java: "Optional.of", pkg: "java.util.Optional", import: "java.util.Optional" },
     Hc: { java: "HttpClient.newHttpClient", pkg: "java.net.http.HttpClient", import: "java.net.http.HttpClient" },
+    Cd: { java: "Character.isDigit", pkg: "java.lang", auto: true },
+    Cl: { java: "Character.isLetter", pkg: "java.lang", auto: true },
+    Cu: { java: "Character.isUpperCase", pkg: "java.lang", auto: true },
+    Di: { java: "Double.isInfinite", pkg: "java.lang", auto: true },
+    Mc: { java: "Math.ceil", pkg: "java.lang", auto: true },
+    Sq: { java: "Math.sqrt", pkg: "java.lang", auto: true },
+    Ep: { java: "Math.pow", pkg: "java.lang", auto: true },
+    Oh: { java: "Objects.hash", pkg: "java.util.Objects", import: "java.util.Objects" },
+    Or: { java: "Objects.requireNonNull", pkg: "java.util.Objects", import: "java.util.Objects" },
+    Ts: { java: "Arrays.toString", pkg: "java.util.Arrays", import: "java.util.Arrays" },
+    Ac: { java: "Arrays.copyOf", pkg: "java.util.Arrays", import: "java.util.Arrays" },
+    Re: { java: "Objects.equals", pkg: "java.util.Objects", import: "java.util.Objects" },
+    Lo: { java: "Character.isLowerCase", pkg: "java.lang", auto: true },
+    Ws: { java: "Character.isWhitespace", pkg: "java.lang", auto: true },
 };
 // ─── Import tracker ────────────────────────────────────────────────────────────
 class ImportTracker {
@@ -42,6 +56,31 @@ class ImportTracker {
             return;
         this.imports.add(importPath);
     }
+    /** Scan a type name and auto-add java.util imports for collection types. */
+    trackType(typeName) {
+        // Detect common java.util types that need importing
+        const utilTypes = [
+            "ArrayList", "LinkedList", "HashMap", "LinkedHashMap", "TreeMap",
+            "HashSet", "LinkedHashSet", "TreeSet", "List", "Map", "Set",
+            "Queue", "Deque", "ArrayDeque", "PriorityQueue",
+            "Collections", "Optional", "Iterator", "StringJoiner",
+            "Objects", "NoSuchElementException", "EmptyStackException",
+        ];
+        for (const t of utilTypes) {
+            if (typeName.includes(t)) {
+                this.add("java.util.*");
+                return;
+            }
+        }
+        // java.util.regex types
+        if (typeName.includes("Pattern") || typeName.includes("Matcher")) {
+            this.add("java.util.regex.*");
+        }
+        // java.util.stream types
+        if (typeName.includes("Collectors") || typeName.includes("Stream")) {
+            this.add("java.util.stream.*");
+        }
+    }
     getImports() {
         return [...this.imports].sort();
     }
@@ -50,21 +89,100 @@ class ImportTracker {
 let imports;
 // Track which variable names are known to be strings (for .length vs .length())
 let stringVarNames = new Set();
+// Track which class names are generic (have type parameters) — used to add <> to new calls
+let genericClassNames = new Set();
+// Track enum value → enum type name mapping for re-qualifying bare enum identifiers
+let enumValueToType = new Map();
+// Flag: when true, don't re-qualify enum values (inside switch case labels)
+let _inSwitchCaseLabel = false;
+/** Pre-scan declarations to find generic class names (those with <T>, <K,V>, etc.) */
+function collectGenericClassNames(decl) {
+    if (decl.kind === "Java_ClassDecl") {
+        const cd = decl;
+        // Class name might contain type params: GenericStack<T>
+        const match = cd.name.match(/^(\w+)<(.+)>$/);
+        if (match) {
+            genericClassNames.add(match[1]);
+        }
+        // Recurse into inner classes
+        for (const ic of cd.innerClasses) {
+            collectGenericClassNames(ic);
+        }
+    }
+}
+/** Pre-scan to collect enum value -> enum type name mapping. */
+function collectEnumValues(decl) {
+    if (decl.kind === "Java_EnumDecl") {
+        const ed = decl;
+        for (const v of ed.values) {
+            enumValueToType.set(v.name, ed.name);
+        }
+    }
+    if (decl.kind === "Java_ClassDecl") {
+        const cd = decl;
+        for (const ic of cd.innerClasses)
+            collectEnumValues(ic);
+    }
+}
+/** Names of sealed interfaces (used to auto-add 'non-sealed' to implementing classes). */
+let sealedInterfaceNames = new Set();
+/** Pre-scan to collect sealed interface names. */
+function collectSealedInterfaces(decl) {
+    if (decl.kind === "Java_SealedInterfaceDecl") {
+        sealedInterfaceNames.add(decl.name);
+    }
+    if (decl.kind === "Java_ClassDecl") {
+        const cd = decl;
+        for (const ic of cd.innerClasses)
+            collectSealedInterfaces(ic);
+    }
+}
 // ─── Public entry point ────────────────────────────────────────────────────────
 export function emit(program, options) {
     imports = new ImportTracker();
     stringVarNames = new Set();
+    genericClassNames = new Set();
+    enumValueToType = new Map();
+    sealedInterfaceNames = new Set();
+    // Pre-scan for generic class declarations, enum values, and sealed interfaces
+    for (const decl of program.decls) {
+        collectGenericClassNames(decl);
+        collectEnumValues(decl);
+        collectSealedInterfaces(decl);
+    }
     const className = options?.className ?? "Main";
     const packageName = options?.packageName;
     // Check whether the program already contains Java_ClassDecl nodes
-    const hasClassDecl = program.decls.some(d => d.kind === "Java_ClassDecl");
+    const hasClassDecl = program.decls.some(d => d.kind === "Java_ClassDecl" || d.kind === "Java_RecordDecl" ||
+        d.kind === "Java_EnumDecl" || d.kind === "Java_SealedInterfaceDecl");
     // Emit declarations into body lines
     const bodyLines = [];
     if (hasClassDecl) {
-        // Emit each declaration at the top level
+        // Separate Java class/record/enum/interface decls from functions/vars
+        const classDecls = [];
+        const mainDecls = [];
         for (const decl of program.decls) {
+            if (decl.kind === "Java_ClassDecl" || decl.kind === "Java_RecordDecl" ||
+                decl.kind === "Java_EnumDecl" || decl.kind === "Java_SealedInterfaceDecl" ||
+                decl.kind === "InterfaceDecl" || decl.kind === "StructDecl") {
+                classDecls.push(decl);
+            }
+            else {
+                mainDecls.push(decl);
+            }
+        }
+        // Emit class decls at top level (as inner classes)
+        // and wrap functions/vars in a main class
+        if (mainDecls.length > 0) {
             bodyLines.push("");
-            bodyLines.push(emitNode(decl, 0));
+            bodyLines.push(emitAutoMainClass(className, mainDecls, 0, classDecls));
+        }
+        else {
+            // Only class decls, emit them directly
+            for (const decl of classDecls) {
+                bodyLines.push("");
+                bodyLines.push(emitNode(decl, 0));
+            }
         }
     }
     else {
@@ -133,7 +251,7 @@ function indent(level) {
     return "    ".repeat(level);
 }
 // ─── Auto main class wrapper ───────────────────────────────────────────────────
-function emitAutoMainClass(className, decls, level) {
+function emitAutoMainClass(className, decls, level, innerClassDecls) {
     const lines = [];
     lines.push(`${indent(level)}public class ${className} {`);
     for (const decl of decls) {
@@ -151,14 +269,50 @@ function emitAutoMainClass(className, decls, level) {
             lines.push(emitNode(decl, level + 1));
         }
     }
+    // Add inner class declarations
+    if (innerClassDecls) {
+        for (const decl of innerClassDecls) {
+            lines.push("");
+            lines.push(emitNode(decl, level + 1));
+        }
+    }
     lines.push(`${indent(level)}}`);
     return lines.join("\n");
 }
 /** Collect variable names whose type is known to be String. */
 function collectStringVars(node) {
     for (const p of node.params) {
-        if (p.type && p.type.name === "string") {
+        if (p.type && (p.type.name === "string" || p.type.name === "String")) {
             stringVarNames.add(p.name);
+        }
+    }
+    // Also scan body for VarDecl/ShortDeclStmt with string types
+    collectStringVarsFromBlock(node.body);
+}
+function collectStringVarsFromBlock(block) {
+    for (const stmt of block.stmts) {
+        if (stmt.kind === "VarDecl") {
+            const vd = stmt;
+            if (vd.type && (vd.type.name === "string" || vd.type.name === "String")) {
+                stringVarNames.add(vd.name);
+            }
+        }
+        else if (stmt.kind === "Java_EnhancedFor") {
+            const ef = stmt;
+            if (ef.varType && (ef.varType.name === "string" || ef.varType.name === "String" || ef.varType.name === "rune")) {
+                stringVarNames.add(ef.varName);
+            }
+            collectStringVarsFromBlock(ef.body);
+        }
+        else if (stmt.kind === "ForStmt") {
+            const fs = stmt;
+            collectStringVarsFromBlock(fs.body);
+        }
+        else if (stmt.kind === "IfStmt") {
+            const is_ = stmt;
+            collectStringVarsFromBlock(is_.body);
+            if (is_.else_ && is_.else_.kind === "BlockStmt")
+                collectStringVarsFromBlock(is_.else_);
         }
     }
 }
@@ -174,24 +328,69 @@ function emitStaticMethod(node, level) {
     }
     const returnType = emitReturnType(node.results);
     const params = node.params.map(p => `${mapType(p.type)} ${p.name}`).join(", ");
+    const typeParamsStr = node.typeParams && node.typeParams.length > 0 ? `<${node.typeParams.join(", ")}> ` : "";
     const lines = [];
-    lines.push(`${indent(level)}public static ${returnType} ${node.name}(${params}) {`);
+    lines.push(`${indent(level)}public static ${typeParamsStr}${returnType} ${node.name}(${params}) {`);
     lines.push(emitBlockBody(node.body, level + 1));
     lines.push(`${indent(level)}}`);
     return lines.join("\n");
 }
 function emitStaticField(node, level) {
-    const type = node.type ? mapType(node.type) : "var";
+    let type = node.type ? mapType(node.type) : "";
+    // 'var' cannot be used for static fields — infer type from value
+    if (!type || type === "var") {
+        type = inferTypeFromExpr(node.value);
+    }
     let s = `${indent(level)}static ${type} ${node.name}`;
     if (node.value)
         s += ` = ${emitExpr(node.value)}`;
     s += ";";
     return s;
 }
+/** Infer a Java type string from an expression (best-effort). */
+function inferTypeFromExpr(expr) {
+    if (!expr)
+        return "Object";
+    switch (expr.kind) {
+        case "BasicLit":
+            switch (expr.type) {
+                case "INT": return "int";
+                case "FLOAT": return "double";
+                case "STRING": return "String";
+                case "CHAR": return "char";
+                default: return "Object";
+            }
+        case "CompositeLit": {
+            if (expr.type?.kind === "ArrayTypeExpr") {
+                const elt = expr.type.elt;
+                let eltType = elt.kind === "Ident" ? mapIRTypeToJava(elt.name) : "Object";
+                // If element type is Object/_in, try to infer from actual elements
+                if (eltType === "Object" && expr.elts.length > 0) {
+                    eltType = inferTypeFromExpr(expr.elts[0]);
+                }
+                return eltType + "[]";
+            }
+            // No type annotation — try to infer from elements
+            if (expr.elts.length > 0) {
+                const firstElt = inferTypeFromExpr(expr.elts[0]);
+                if (firstElt !== "Object")
+                    return firstElt + "[]";
+            }
+            return "Object[]";
+        }
+        case "Java_NewExpr":
+            return mapType(expr.type);
+        default:
+            return "Object";
+    }
+}
 function emitStaticConst(node, level) {
     const lines = [];
     for (const spec of node.specs) {
-        const type = spec.type ? mapType(spec.type) : "var";
+        let type = spec.type ? mapType(spec.type) : "";
+        if (!type || type === "var") {
+            type = inferTypeFromExpr(spec.value);
+        }
         let s = `${indent(level)}static final ${type} ${spec.name}`;
         if (spec.value)
             s += ` = ${emitExpr(spec.value)}`;
@@ -262,10 +461,37 @@ function emitOrphanReceiverClass(typeName, methods, level) {
     return lines.join("\n");
 }
 function emitInstanceMethod(node, level) {
+    collectStringVars(node);
+    // main method with no params gets standard Java main signature
+    if (node.name === "main" && node.params.length === 0) {
+        const lines = [];
+        lines.push(`${indent(level)}public static void main(String[] args) {`);
+        lines.push(emitBlockBody(node.body, level + 1));
+        lines.push(`${indent(level)}}`);
+        return lines.join("\n");
+    }
     const returnType = emitReturnType(node.results);
     const params = node.params.map(p => `${mapType(p.type)} ${p.name}`).join(", ");
     const lines = [];
-    lines.push(`${indent(level)}public ${returnType} ${node.name}(${params}) {`);
+    // Read method modifiers from the transformer (stored via (decl as any).modifiers)
+    const methodMods = node.modifiers || [];
+    // Build modifier string
+    let modsStr = "";
+    const hasAccess = methodMods.some(m => m === "public" || m === "private" || m === "protected");
+    if (!hasAccess)
+        modsStr += "public ";
+    else
+        modsStr += methodMods.filter(m => m === "public" || m === "private" || m === "protected").join(" ") + " ";
+    if (methodMods.includes("static"))
+        modsStr += "static ";
+    // Method-level type parameters (e.g., <T>)
+    const typeParamsStr = node.typeParams && node.typeParams.length > 0 ? `<${node.typeParams.join(", ")}> ` : "";
+    modsStr += typeParamsStr;
+    // Check for @Override
+    if (methodMods.includes("override")) {
+        lines.push(`${indent(level)}@Override`);
+    }
+    lines.push(`${indent(level)}${modsStr}${returnType} ${node.name}(${params}) {`);
     lines.push(emitBlockBody(node.body, level + 1));
     lines.push(`${indent(level)}}`);
     return lines.join("\n");
@@ -307,6 +533,10 @@ function emitNode(node, level) {
         case "Java_TryCatch": return emitJavaTryCatch(node, level);
         case "Java_EnhancedFor": return emitJavaEnhancedFor(node, level);
         case "Java_ThrowStmt": return emitJavaThrowStmt(node, level);
+        // AET-Java v1 nodes
+        case "Java_RecordDecl": return emitRecordDecl(node, level);
+        case "Java_EnumDecl": return emitEnumDecl(node, level);
+        case "Java_SealedInterfaceDecl": return emitSealedInterfaceDecl(node, level);
         // Go-specific nodes — error
         case "SelectStmt":
             throw new Error("Go-specific construct SelectStmt not supported for Java target");
@@ -423,7 +653,9 @@ function emitSwitchStmt(node, level) {
     for (const c of node.cases) {
         if (c.values) {
             for (const v of c.values) {
+                _inSwitchCaseLabel = true;
                 s += `${indent(level + 1)}case ${emitExpr(v)}:\n`;
+                _inSwitchCaseLabel = false;
             }
         }
         else {
@@ -494,13 +726,23 @@ function emitShortDeclStmt(node, level) {
         return emitErrorPropDecl(node.names, node.values[0], level);
     }
     if (node.names.length === 1 && node.values.length === 1) {
-        return `${indent(level)}var ${node.names[0]} = ${emitExpr(node.values[0])};`;
+        const valStr = emitExpr(node.values[0]);
+        // Java can't infer type from null — use Object instead of var
+        if (valStr === "null") {
+            return `${indent(level)}Object ${node.names[0]} = null;`;
+        }
+        return `${indent(level)}var ${node.names[0]} = ${valStr};`;
     }
     // Multiple declarations
     const lines = [];
     for (let i = 0; i < node.names.length; i++) {
         const val = i < node.values.length ? emitExpr(node.values[i]) : "null";
-        lines.push(`${indent(level)}var ${node.names[i]} = ${val};`);
+        if (val === "null") {
+            lines.push(`${indent(level)}Object ${node.names[i]} = null;`);
+        }
+        else {
+            lines.push(`${indent(level)}var ${node.names[i]} = ${val};`);
+        }
     }
     return lines.join("\n");
 }
@@ -559,7 +801,12 @@ function emitVarDecl(node, level) {
         return `${indent(level)}${mapType(node.type)} ${node.name};`;
     }
     if (node.value) {
-        return `${indent(level)}var ${node.name} = ${emitExpr(node.value)};`;
+        // Java can't infer type from null — use Object instead of var
+        const valStr = emitExpr(node.value);
+        if (valStr === "null") {
+            return `${indent(level)}Object ${node.name} = null;`;
+        }
+        return `${indent(level)}var ${node.name} = ${valStr};`;
     }
     return `${indent(level)}var ${node.name};`;
 }
@@ -576,10 +823,63 @@ function emitConstDecl(node, level) {
     return lines.join("\n");
 }
 // ─── Java-specific node emission ───────────────────────────────────────────────
+/** Parse a field tag like "modifiers:private,final;init:new ArrayList<>()" */
+function parseFieldTag(tag) {
+    if (!tag)
+        return { modifiers: [], init: undefined };
+    // Simple legacy tag: just "final"
+    if (tag === "final")
+        return { modifiers: ["final"], init: undefined };
+    const result = { modifiers: [], init: undefined };
+    // Split on ';' but be careful about init values that may contain ';'
+    const modsMatch = tag.match(/^modifiers:([^;]*)/);
+    if (modsMatch) {
+        result.modifiers = modsMatch[1].split(",").filter(m => m.length > 0);
+    }
+    const initMatch = tag.match(/;init:(.+)$/s);
+    if (initMatch) {
+        result.init = initMatch[1];
+    }
+    else if (tag.startsWith("init:")) {
+        result.init = tag.substring(5);
+    }
+    return result;
+}
 function emitJavaClassDecl(node, level) {
     const lines = [];
-    const mods = node.modifiers.length > 0 ? node.modifiers.join(" ") + " " : "";
-    let header = `${indent(level)}${mods}class ${node.name}`;
+    // Add non-sealed modifier if the class implements interfaces and isn't already sealed/non-sealed/final
+    const mods = [...node.modifiers];
+    // Inner classes (level > 0) should be static unless already marked
+    if (level > 0 && !mods.includes("static")) {
+        // Insert static after access modifier or at the start
+        const accessIdx = Math.max(mods.indexOf("public"), mods.indexOf("private"), mods.indexOf("protected"));
+        if (accessIdx >= 0) {
+            mods.splice(accessIdx + 1, 0, "static");
+        }
+        else {
+            mods.unshift("static");
+        }
+    }
+    // Auto-add non-sealed when implementing a sealed interface and no seal modifier present
+    if (node.interfaces.length > 0 &&
+        !mods.includes("non-sealed") && !mods.includes("sealed") && !mods.includes("final")) {
+        const implementsSealed = node.interfaces.some(iface => {
+            const baseName = iface.replace(/<.*>$/, "");
+            return sealedInterfaceNames.has(baseName);
+        });
+        if (implementsSealed) {
+            // Insert non-sealed before 'class' (after static if present)
+            const staticIdx = mods.indexOf("static");
+            if (staticIdx >= 0) {
+                mods.splice(staticIdx + 1, 0, "non-sealed");
+            }
+            else {
+                mods.push("non-sealed");
+            }
+        }
+    }
+    const modsStr = mods.length > 0 ? mods.join(" ") + " " : "";
+    let header = `${indent(level)}${modsStr}class ${node.name}`;
     if (node.superClass) {
         header += ` extends ${node.superClass}`;
     }
@@ -588,14 +888,73 @@ function emitJavaClassDecl(node, level) {
     }
     header += " {";
     lines.push(header);
+    // Parse field tags to detect modifiers and initializers
+    const hasFinalFields = node.fields.some(f => {
+        const fieldMods = parseFieldTag(f.tag).modifiers;
+        return fieldMods.includes("final") || node.modifiers.includes("final");
+    });
     // Fields
     for (const f of node.fields) {
-        lines.push(`${indent(level + 1)}private ${mapType(f.type)} ${f.name};`);
+        const parsed = parseFieldTag(f.tag);
+        const fieldMods = parsed.modifiers;
+        const isFinal = fieldMods.includes("final");
+        const isPrivate = fieldMods.includes("private") || !fieldMods.some(m => m === "public" || m === "protected");
+        const accessMod = fieldMods.includes("public") ? "public" : fieldMods.includes("protected") ? "protected" : "private";
+        const staticMod = fieldMods.includes("static") ? " static" : "";
+        const finalMod = isFinal ? " final" : "";
+        const typeName = mapType(f.type);
+        imports.trackType(typeName);
+        // Track String fields for .length() vs .length
+        if (typeName === "String") {
+            stringVarNames.add(f.name);
+        }
+        let fieldLine = `${indent(level + 1)}${accessMod}${staticMod}${finalMod} ${typeName} ${f.name}`;
+        if (parsed.init) {
+            fieldLine += ` = ${parsed.init}`;
+            imports.trackType(parsed.init);
+        }
+        fieldLine += ";";
+        lines.push(fieldLine);
     }
-    // Constructors
-    for (const ctor of node.constructors) {
-        lines.push("");
-        lines.push(emitConstructor(node.name, ctor, level + 1));
+    // Constructors (auto-generate if final fields exist but no constructors provided)
+    // Strip type parameters from name for constructor (GenericStack<T> -> GenericStack)
+    const ctorName = node.name.replace(/<.*>$/, "");
+    const uninitFields = node.fields.filter(f => !parseFieldTag(f.tag).init);
+    if (node.constructors.length === 0 && node.fields.length > 0 && hasFinalFields) {
+        // Auto-generate all-args constructor
+        if (uninitFields.length > 0) {
+            lines.push("");
+            const ctorParams = uninitFields.map(f => `${mapType(f.type)} ${f.name}`).join(", ");
+            lines.push(`${indent(level + 1)}public ${ctorName}(${ctorParams}) {`);
+            for (const f of uninitFields) {
+                lines.push(`${indent(level + 2)}this.${f.name} = ${f.name};`);
+            }
+            lines.push(`${indent(level + 1)}}`);
+        }
+    }
+    else {
+        // Emit explicit constructors AND auto-generate all-args constructor if needed
+        // Check if any existing constructor uses this(args) delegation — need the target
+        const needsAllArgsCtor = hasFinalFields && uninitFields.length > 0 &&
+            node.constructors.some(c => {
+                // Check if constructor body contains this(...) call
+                return c.body.stmts.some(s => s.kind === "ExprStmt" && s.expr?.kind === "CallExpr" &&
+                    s.expr?.func?.name === "this");
+            }) &&
+            !node.constructors.some(c => c.params.length === uninitFields.length);
+        if (needsAllArgsCtor) {
+            lines.push("");
+            const ctorParams = uninitFields.map(f => `${mapType(f.type)} ${f.name}`).join(", ");
+            lines.push(`${indent(level + 1)}public ${ctorName}(${ctorParams}) {`);
+            for (const f of uninitFields) {
+                lines.push(`${indent(level + 2)}this.${f.name} = ${f.name};`);
+            }
+            lines.push(`${indent(level + 1)}}`);
+        }
+        for (const ctor of node.constructors) {
+            lines.push("");
+            lines.push(emitConstructor(ctorName, ctor, level + 1));
+        }
     }
     // Methods
     for (const m of node.methods) {
@@ -663,6 +1022,125 @@ function emitJavaEnhancedFor(node, level) {
 function emitJavaThrowStmt(node, level) {
     return `${indent(level)}throw ${emitExpr(node.expr)};`;
 }
+// ─── AET-Java v1 node emission ────────────────────────────────────────────────
+function emitRecordDecl(node, level) {
+    const lines = [];
+    const typeParams = node.typeParams.length > 0 ? `<${node.typeParams.join(", ")}>` : "";
+    const components = node.components.map(c => `${mapType(c.type)} ${c.name}`).join(", ");
+    // Track component types for imports
+    for (const c of node.components) {
+        imports.trackType(mapType(c.type));
+    }
+    // Records are implicitly static when nested; just ensure public visibility
+    let header = `${indent(level)}public record ${node.name}${typeParams}(${components})`;
+    if (node.interfaces.length > 0) {
+        header += ` implements ${node.interfaces.join(", ")}`;
+    }
+    header += " {";
+    lines.push(header);
+    // Explicit methods (e.g., custom toString, computed getters)
+    for (const m of node.methods) {
+        lines.push("");
+        lines.push(emitInstanceMethod(m, level + 1));
+    }
+    lines.push(`${indent(level)}}`);
+    return lines.join("\n");
+}
+function emitEnumDecl(node, level) {
+    const lines = [];
+    let header = `${indent(level)}public enum ${node.name}`;
+    if (node.interfaces.length > 0) {
+        header += ` implements ${node.interfaces.join(", ")}`;
+    }
+    header += " {";
+    lines.push(header);
+    // Enum values
+    const valueStrs = [];
+    for (const v of node.values) {
+        if (v.args.length > 0) {
+            const args = v.args.map(emitExpr).join(", ");
+            valueStrs.push(`${indent(level + 1)}${v.name}(${args})`);
+        }
+        else {
+            valueStrs.push(`${indent(level + 1)}${v.name}`);
+        }
+    }
+    if (valueStrs.length > 0) {
+        lines.push(valueStrs.join(",\n") + ";");
+    }
+    // Fields
+    for (const f of node.fields) {
+        lines.push("");
+        lines.push(`${indent(level + 1)}private final ${mapType(f.type)} ${f.name};`);
+    }
+    // Constructors
+    for (const ctor of node.constructors) {
+        lines.push("");
+        lines.push(emitConstructor(node.name, ctor, level + 1));
+    }
+    // Methods
+    for (const m of node.methods) {
+        lines.push("");
+        lines.push(emitInstanceMethod(m, level + 1));
+    }
+    lines.push(`${indent(level)}}`);
+    return lines.join("\n");
+}
+function emitSealedInterfaceDecl(node, level) {
+    const lines = [];
+    const typeParams = node.typeParams.length > 0 ? `<${node.typeParams.join(", ")}>` : "";
+    // Sealed interfaces are implicitly static when nested
+    let header = `${indent(level)}public sealed interface ${node.name}${typeParams}`;
+    if (node.permits.length > 0) {
+        header += ` permits ${node.permits.join(", ")}`;
+    }
+    header += " {";
+    lines.push(header);
+    for (const m of node.methods) {
+        const returnType = emitReturnType(m.results);
+        const params = m.params.map(p => `${mapType(p.type)} ${p.name}`).join(", ");
+        lines.push(`${indent(level + 1)}${returnType} ${m.name}(${params});`);
+    }
+    lines.push(`${indent(level)}}`);
+    return lines.join("\n");
+}
+function emitSwitchExpr(expr) {
+    const lines = [];
+    lines.push(`switch (${emitExpr(expr.tag)}) {`);
+    for (const c of expr.cases) {
+        if (c.values) {
+            _inSwitchCaseLabel = true;
+            const vals = c.values.map(emitExpr).join(", ");
+            _inSwitchCaseLabel = false;
+            if ("kind" in c.body && c.body.kind === "BlockStmt") {
+                lines.push(`    case ${vals} -> {`);
+                const block = c.body;
+                for (const stmt of block.stmts) {
+                    lines.push("    " + emitNode(stmt, 2));
+                }
+                lines.push(`    }`);
+            }
+            else {
+                lines.push(`    case ${vals} -> ${emitExpr(c.body)};`);
+            }
+        }
+        else {
+            if ("kind" in c.body && c.body.kind === "BlockStmt") {
+                lines.push(`    default -> {`);
+                const block = c.body;
+                for (const stmt of block.stmts) {
+                    lines.push("    " + emitNode(stmt, 2));
+                }
+                lines.push(`    }`);
+            }
+            else {
+                lines.push(`    default -> ${emitExpr(c.body)};`);
+            }
+        }
+    }
+    lines.push(`}`);
+    return lines.join("\n");
+}
 // ─── Expression emission ───────────────────────────────────────────────────────
 // Emit condition expression, stripping outer parens to avoid double-wrapping
 function emitCondExpr(expr) {
@@ -688,16 +1166,19 @@ export function emitExpr(expr) {
             return emitCallExpr(expr);
         case "SelectorExpr": {
             // Reverse keyword method renames from Java→AET conversion
-            const KEYWORD_UNRENAMES = {
-                "apd": "append",
-                "del": "delete",
-                "cpy_": "copy",
-                "nw_": "new",
-                "mk_": "make",
-                "flt_": "filter",
-                "rng_": "range",
-            };
+            const KEYWORD_UNRENAMES = Object.create(null);
+            KEYWORD_UNRENAMES["apd"] = "append";
+            KEYWORD_UNRENAMES["del"] = "delete";
+            KEYWORD_UNRENAMES["cpy_"] = "copy";
+            KEYWORD_UNRENAMES["nw_"] = "new";
+            KEYWORD_UNRENAMES["mk_"] = "make";
+            KEYWORD_UNRENAMES["flt_"] = "filter";
+            KEYWORD_UNRENAMES["rng_"] = "range";
             const sel = KEYWORD_UNRENAMES[expr.sel] ?? expr.sel;
+            // String .length field → .length() method call
+            if (sel === "length" && expr.x.kind === "Ident" && stringVarNames.has(expr.x.name)) {
+                return `${emitExpr(expr.x)}.length()`;
+            }
             return `${emitExpr(expr.x)}.${sel}`;
         }
         case "IndexExpr":
@@ -745,6 +1226,9 @@ export function emitExpr(expr) {
             return emitJavaCastExpr(expr);
         case "Java_TernaryExpr":
             return emitJavaTernaryExpr(expr);
+        // AET-Java v1 expressions
+        case "Java_SwitchExpr":
+            return emitSwitchExpr(expr);
         default:
             return `/* unknown expr: ${expr.kind} */`;
     }
@@ -756,7 +1240,16 @@ function emitIdent(expr) {
         case "true": return "true";
         case "false": return "false";
         case "iota": return "/* iota */";
-        default: return expr.name;
+        default: {
+            // Re-qualify bare enum values: PLUS → TokenType.PLUS
+            // But NOT inside switch case labels (Java requires unqualified names there)
+            if (!_inSwitchCaseLabel) {
+                const enumType = enumValueToType.get(expr.name);
+                if (enumType)
+                    return `${enumType}.${expr.name}`;
+            }
+            return expr.name;
+        }
     }
 }
 function emitBasicLit(expr) {
@@ -797,8 +1290,13 @@ function emitCompositeLit(expr) {
     if (typeExpr.kind === "ArrayTypeExpr") {
         let eltType = mapIRTypeToJava(emitExpr(typeExpr.elt));
         const elts = expr.elts.map(emitExpr).join(", ");
-        // If element type is Object (from _in), emit bare initializer {elts}
-        // This works when nested inside another array initializer
+        // If element type is Object (from _in), try to infer from actual elements
+        if (eltType === "Object" && expr.elts.length > 0) {
+            const inferred = inferTypeFromExpr(expr.elts[0]);
+            if (inferred !== "Object") {
+                eltType = inferred;
+            }
+        }
         if (eltType === "Object") {
             return `{${elts}}`;
         }
@@ -858,6 +1356,10 @@ function emitUnaryExpr(expr) {
 }
 function emitCallExpr(expr) {
     const args = expr.args.map(emitExpr).join(", ");
+    // Preserve "nil" as a method name when used as a function call (not standalone keyword)
+    if (expr.func.kind === "Ident" && expr.func.name === "nil") {
+        return `nil(${args})`;
+    }
     // Check if the function is a stdlib alias
     if (expr.func.kind === "Ident") {
         const alias = STDLIB_ALIASES[expr.func.name];
@@ -970,6 +1472,15 @@ function emitCallExpr(expr) {
         }
     }
     const funcStr = emitExpr(expr.func);
+    // If calling an uppercase name that matches a known generic class, emit as new ClassName<>(args)
+    if (expr.func.kind === "Ident") {
+        const name = expr.func.name;
+        if (/^[A-Z]/.test(name) && genericClassNames.has(name)) {
+            return `new ${name}<>(${args})`;
+        }
+        // Even for non-tracked classes, uppercase first letter suggests constructor
+        // (already handled by Java conventions, but don't double-new)
+    }
     return `${funcStr}(${args})`;
 }
 function emitLenCall(args) {
@@ -1014,6 +1525,13 @@ function emitMakeCall(args) {
         while (javaElt.endsWith("[]")) {
             javaElt = javaElt.slice(0, -2);
             extraDims++;
+        }
+        // If size is 0 and element is Object/_in (from diamond ArrayList<>()), emit new ArrayList<>()
+        const sizeArg = args.length > 1 ? args[1] : null;
+        const isZeroSize = sizeArg && sizeArg.kind === "BasicLit" && sizeArg.value === "0";
+        if ((isZeroSize || args.length === 1) && (javaElt === "Object") && extraDims === 0) {
+            imports.add("java.util.ArrayList");
+            return `new ArrayList<>()`;
         }
         // Build dimensions: first dim uses args[1], subsequent dims use args[2], args[3]...
         let dimStr = "";
@@ -1239,8 +1757,39 @@ function emitFuncTypeExpr(expr) {
 }
 // ─── Java-specific expression emission ─────────────────────────────────────────
 function emitJavaNewExpr(expr) {
+    const typeName = mapType(expr.type);
+    // Handle array creation: new int[](5) → new int[5], new int[][](5,3) → new int[5][3]
+    if (typeName.endsWith("[]") && expr.args.length >= 1) {
+        // Count trailing [] brackets
+        let baseType = typeName;
+        let dimCount = 0;
+        while (baseType.endsWith("[]")) {
+            baseType = baseType.slice(0, -2);
+            dimCount++;
+        }
+        // Build dimension brackets with sizes
+        let result = `new ${baseType}`;
+        for (let d = 0; d < dimCount; d++) {
+            if (d < expr.args.length) {
+                result += `[${emitExpr(expr.args[d])}]`;
+            }
+            else {
+                result += `[]`;
+            }
+        }
+        return result;
+    }
     const args = expr.args.map(emitExpr).join(", ");
-    return `new ${mapType(expr.type)}(${args})`;
+    // Add diamond <> for generic class constructors if not already present
+    const GENERIC_STDLIB_TYPES = new Set([
+        "ArrayList", "LinkedList", "HashMap", "LinkedHashMap", "TreeMap",
+        "HashSet", "LinkedHashSet", "TreeSet", "ArrayDeque", "PriorityQueue",
+        "ConcurrentHashMap", "CopyOnWriteArrayList",
+    ]);
+    if (!typeName.includes("<") && (genericClassNames.has(typeName) || GENERIC_STDLIB_TYPES.has(typeName))) {
+        return `new ${typeName}<>(${args})`;
+    }
+    return `new ${typeName}(${args})`;
 }
 function emitJavaLambdaExpr(expr) {
     const params = expr.params.map(p => {
@@ -1257,7 +1806,11 @@ function emitJavaLambdaExpr(expr) {
     return `(${params}) -> ${emitExpr(expr.body)}`;
 }
 function emitJavaInstanceofExpr(expr) {
-    return `${emitExpr(expr.expr)} instanceof ${mapType(expr.type)}`;
+    const typeName = mapType(expr.type);
+    if (expr.binding) {
+        return `${emitExpr(expr.expr)} instanceof ${typeName} ${expr.binding}`;
+    }
+    return `${emitExpr(expr.expr)} instanceof ${typeName}`;
 }
 function emitJavaCastExpr(expr) {
     return `(${mapType(expr.type)}) ${emitExpr(expr.expr)}`;
@@ -1332,8 +1885,45 @@ function mapType(irType) {
     if (name.startsWith("chan ") || name.startsWith("chan<-") || name.startsWith("<-chan")) {
         throw new Error("Go-specific construct chan not supported for Java target");
     }
+    // Parameterized type name: HashMap<string, _in> → HashMap<String, Object>
+    const genMatch = name.match(/^(\w+)<(.+)>$/);
+    if (genMatch) {
+        const baseName = genMatch[1];
+        const rawArgs = splitTypeArgs(genMatch[2]);
+        const mappedArgs = rawArgs.map(a => boxType(mapType({ name: a.trim() })));
+        imports.trackType(baseName);
+        return `${baseName}<${mappedArgs.join(", ")}>`;
+    }
     // User-defined or unrecognized type: pass through as-is
+    // Track imports for collection/util types
+    imports.trackType(name);
     return name;
+}
+/** Split comma-separated type args respecting nested <> brackets. */
+function splitTypeArgs(s) {
+    const result = [];
+    let depth = 0;
+    let current = "";
+    for (const ch of s) {
+        if (ch === '<') {
+            depth++;
+            current += ch;
+        }
+        else if (ch === '>') {
+            depth--;
+            current += ch;
+        }
+        else if (ch === ',' && depth === 0) {
+            result.push(current);
+            current = "";
+        }
+        else {
+            current += ch;
+        }
+    }
+    if (current)
+        result.push(current);
+    return result;
 }
 function emitReturnType(results) {
     if (results.length === 0)
