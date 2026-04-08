@@ -1,6 +1,7 @@
 // IR (Intermediate Representation) types
 // Aligned with Go AST node types: FunctionDecl, IfStmt, ForStmt, AssignStmt, CallExpr, etc.
 // Java-specific nodes use Java_ prefix. Go emitter errors on Java_ nodes; Java emitter errors on Go-only nodes.
+// Python-specific nodes use Py_ prefix.
 // These exist only in memory — not serialized to file format.
 
 export type IRNode =
@@ -36,7 +37,19 @@ export type IRNode =
   // AET-Java specific nodes (v1)
   | Java_RecordDecl
   | Java_EnumDecl
-  | Java_SealedInterfaceDecl;
+  | Java_SealedInterfaceDecl
+  // Python-specific nodes
+  | Py_ClassDecl
+  | Py_TryExcept
+  | Py_WithStmt
+  | Py_MatchStmt
+  | Py_RaiseStmt
+  | Py_AssertStmt
+  | Py_DeleteStmt
+  | Py_GlobalStmt
+  | Py_NonlocalStmt
+  | Py_ForElse
+  | Py_WhileElse;
 
 export type IRExpr =
   | IRIdent
@@ -70,7 +83,20 @@ export type IRExpr =
   | Java_CastExpr
   | Java_TernaryExpr
   // AET-Java specific expressions (v1)
-  | Java_SwitchExpr;
+  | Java_SwitchExpr
+  // Python-specific expressions
+  | Py_LambdaExpr
+  | Py_ComprehensionExpr
+  | Py_FStringExpr
+  | Py_TernaryExpr
+  | Py_StarExpr
+  | Py_YieldExpr
+  | Py_YieldFromExpr
+  | Py_AwaitExpr
+  | Py_WalrusExpr
+  | Py_DictExpr
+  | Py_SetExpr
+  | Py_TupleExpr;
 
 export type IRType = {
   name: string;        // "int", "string", "error", "[]byte", "map[string]int", "*User", etc.
@@ -102,6 +128,7 @@ export interface IRFuncDecl {
   kind: "FuncDecl";
   name: string;
   receiver?: { name: string; type: IRType; pointer: boolean };
+  typeParams?: string[];  // Method-level type parameters (e.g., <T> on generic methods)
   params: IRParam[];
   results: IRType[];     // Return types
   body: IRBlockStmt;
@@ -583,3 +610,289 @@ export interface Java_SwitchExprCase {
   values: IRExpr[] | null;          // null = default
   body: IRExpr | IRBlockStmt;       // expression or block with yield
 }
+
+// ============= Python-Specific IR Nodes =============
+// These are used by the Python reverse parser (Python → IR) and Python emitter (IR → Python).
+// Go/Java emitters MUST error when encountering any Py_ node.
+
+// Python class declaration
+export interface Py_ClassDecl {
+  kind: "Py_ClassDecl";
+  name: string;
+  bases: IRExpr[];                   // base classes
+  keywords: { key: string; value: IRExpr }[];  // metaclass=Meta, etc.
+  decorators: Py_Decorator[];
+  body: (IRNode | IRExprStmt)[];     // methods, assignments, inner classes
+  stmtIndex: number;
+}
+
+export interface Py_Decorator {
+  expr: IRExpr;                      // the decorator expression
+}
+
+// Python function declaration (extends FuncDecl concept)
+export interface Py_FuncDecl {
+  kind: "FuncDecl";
+  name: string;                      // includes magic method short forms: "init", "str", etc.
+  isAsync: boolean;
+  params: Py_ParamList;
+  returnType?: string;               // type annotation (typed mode only)
+  decorators: Py_Decorator[];
+  body: IRBlockStmt;
+  stmtIndex: number;
+}
+
+export interface Py_ParamList {
+  params: Py_Param[];
+  vararg?: Py_Param;                 // *args
+  kwarg?: Py_Param;                  // **kwargs
+  kwonly?: Py_Param[];               // keyword-only params (after *)
+  posonly?: Py_Param[];              // positional-only params (before /)
+}
+
+export interface Py_Param {
+  name: string;
+  type?: string;                     // type annotation
+  default_?: IRExpr;                 // default value
+}
+
+// Try / Except / Else / Finally
+export interface Py_TryExcept {
+  kind: "Py_TryExcept";
+  body: IRBlockStmt;
+  handlers: Py_ExceptHandler[];
+  elseBody?: IRBlockStmt;
+  finallyBody?: IRBlockStmt;
+  stmtIndex: number;
+}
+
+export interface Py_ExceptHandler {
+  type?: IRExpr;                     // exception type(s) — may be tuple
+  name?: string;                     // "as name"
+  body: IRBlockStmt;
+}
+
+// With statement
+export interface Py_WithStmt {
+  kind: "Py_WithStmt";
+  isAsync: boolean;
+  items: Py_WithItem[];
+  body: IRBlockStmt;
+  stmtIndex: number;
+}
+
+export interface Py_WithItem {
+  contextExpr: IRExpr;
+  optionalVar?: string;              // "as name"
+}
+
+// Match / Case (Python 3.10+)
+export interface Py_MatchStmt {
+  kind: "Py_MatchStmt";
+  subject: IRExpr;
+  cases: Py_MatchCase[];
+  stmtIndex: number;
+}
+
+export interface Py_MatchCase {
+  pattern: IRExpr;                   // pattern expression
+  guard?: IRExpr;                    // optional guard ("if expr")
+  body: IRBlockStmt;
+}
+
+// Raise statement
+export interface Py_RaiseStmt {
+  kind: "Py_RaiseStmt";
+  exc?: IRExpr;
+  cause?: IRExpr;                    // "from" clause
+  stmtIndex: number;
+}
+
+// Assert statement
+export interface Py_AssertStmt {
+  kind: "Py_AssertStmt";
+  test: IRExpr;
+  msg?: IRExpr;
+  stmtIndex: number;
+}
+
+// Delete statement
+export interface Py_DeleteStmt {
+  kind: "Py_DeleteStmt";
+  targets: IRExpr[];
+  stmtIndex: number;
+}
+
+// Global statement
+export interface Py_GlobalStmt {
+  kind: "Py_GlobalStmt";
+  names: string[];
+  stmtIndex: number;
+}
+
+// Nonlocal statement
+export interface Py_NonlocalStmt {
+  kind: "Py_NonlocalStmt";
+  names: string[];
+  stmtIndex: number;
+}
+
+// For-else (Python-specific: for...else)
+export interface Py_ForElse {
+  kind: "Py_ForElse";
+  isAsync: boolean;
+  target: IRExpr;                    // loop variable(s)
+  iter: IRExpr;                      // iterable
+  body: IRBlockStmt;
+  elseBody: IRBlockStmt;
+  stmtIndex: number;
+}
+
+// While-else (Python-specific: while...else)
+export interface Py_WhileElse {
+  kind: "Py_WhileElse";
+  cond: IRExpr;
+  body: IRBlockStmt;
+  elseBody: IRBlockStmt;
+  stmtIndex: number;
+}
+
+// Python lambda: |params| expr
+export interface Py_LambdaExpr {
+  kind: "Py_LambdaExpr";
+  params: Py_Param[];
+  body: IRExpr;
+}
+
+// List/Dict/Set/Generator comprehension
+export interface Py_ComprehensionExpr {
+  kind: "Py_ComprehensionExpr";
+  type: "list" | "dict" | "set" | "generator";
+  elt: IRExpr;                       // the output expression
+  keyExpr?: IRExpr;                  // for dict comp: key expression
+  generators: Py_Comprehension[];
+}
+
+export interface Py_Comprehension {
+  target: IRExpr;
+  iter: IRExpr;
+  ifs: IRExpr[];
+  isAsync: boolean;
+}
+
+// F-string
+export interface Py_FStringExpr {
+  kind: "Py_FStringExpr";
+  parts: (string | { expr: IRExpr; conversion?: string; formatSpec?: string })[];
+}
+
+// Python ternary: value if condition else other
+export interface Py_TernaryExpr {
+  kind: "Py_TernaryExpr";
+  value: IRExpr;
+  test: IRExpr;
+  orElse: IRExpr;
+}
+
+// Star expression: *expr
+export interface Py_StarExpr {
+  kind: "Py_StarExpr";
+  value: IRExpr;
+  isDouble: boolean;                 // ** for kwargs
+}
+
+// Yield expression
+export interface Py_YieldExpr {
+  kind: "Py_YieldExpr";
+  value?: IRExpr;
+}
+
+// Yield from expression
+export interface Py_YieldFromExpr {
+  kind: "Py_YieldFromExpr";
+  value: IRExpr;
+}
+
+// Await expression
+export interface Py_AwaitExpr {
+  kind: "Py_AwaitExpr";
+  value: IRExpr;
+}
+
+// Walrus operator: name := expr
+export interface Py_WalrusExpr {
+  kind: "Py_WalrusExpr";
+  target: string;
+  value: IRExpr;
+}
+
+// Dict literal: {k: v, ...}
+export interface Py_DictExpr {
+  kind: "Py_DictExpr";
+  keys: (IRExpr | null)[];           // null for **spread
+  values: IRExpr[];
+}
+
+// Set literal: {a, b, c}
+export interface Py_SetExpr {
+  kind: "Py_SetExpr";
+  elts: IRExpr[];
+}
+
+// Tuple expression: (a, b, c)
+export interface Py_TupleExpr {
+  kind: "Py_TupleExpr";
+  elts: IRExpr[];
+}
+
+// Slots declaration helper
+export interface Py_SlotsDecl {
+  names: string[];
+}
+
+// Magic method name mapping (short → dunder)
+export const PY_MAGIC_METHODS: Record<string, string> = {
+  "init": "__init__",
+  "str": "__str__",
+  "repr": "__repr__",
+  "eq": "__eq__",
+  "hash": "__hash__",
+  "ln": "__len__",
+  "iter": "__iter__",
+  "next": "__next__",
+  "enter": "__enter__",
+  "exit": "__exit__",
+  "gi": "__getitem__",
+  "si": "__setitem__",
+  "ct": "__contains__",
+  "call": "__call__",
+  "lt": "__lt__",
+  "le": "__le__",
+  "gt": "__gt__",
+  "ge": "__ge__",
+  "$get": "__get__",
+  "$set": "__set__",
+  "$sn": "__set_name__",
+  "bool": "__bool__",
+  "del": "__del__",
+  "aenter": "__aenter__",
+  "aexit": "__aexit__",
+  "aiter": "__aiter__",
+  "anext": "__anext__",
+  "add": "__add__",
+  "sub": "__sub__",
+  "mul": "__mul__",
+  "truediv": "__truediv__",
+  "floordiv": "__floordiv__",
+  "mod": "__mod__",
+  "pow": "__pow__",
+  "neg": "__neg__",
+  "pos": "__pos__",
+  "abs": "__abs__",
+  "invert": "__invert__",
+};
+
+// Reverse mapping (dunder → short)
+export const PY_MAGIC_REVERSE: Record<string, string> = Object.fromEntries(
+  Object.entries(PY_MAGIC_METHODS).map(([k, v]) => [v, k])
+);
