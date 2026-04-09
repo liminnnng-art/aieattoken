@@ -1,5 +1,5 @@
 
-public class B01_maxmin {
+public class B01_maxmin.aet {
 
     public static int findMax(int[] arr) {
         var max = arr[0];

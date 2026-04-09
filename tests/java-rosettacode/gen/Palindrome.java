@@ -1,5 +1,5 @@
 
-public class Palindrome {
+public class Palindrome.aet {
 
     public static boolean isPalindrome(String s) {
         var left = 0;

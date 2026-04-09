@@ -1,5 +1,5 @@
 
-public class Fibonacci {
+public class Fibonacci.aet {
 
     public static long fib(int n) {
         if (n < 2) {

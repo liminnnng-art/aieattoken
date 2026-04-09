@@ -1,5 +1,5 @@
 
-public class Tokenize {
+public class Tokenize.aet {
 
     public static void main(String[] args) {
         var input = "Hello,How,Are,You,Today";
