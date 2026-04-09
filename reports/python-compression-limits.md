@@ -1,13 +1,26 @@
 # AET-Python Compression Limits
 
-## Current State
+## Final State (After Phase 4 Optimization)
 
-| Code Type | Avg Saving | Target |
-|-----------|-----------|--------|
-| Algorithmic (RosettaCode) | 16.9% | ≥40% |
-| Real-world (Group B) | 38.0% | ≥40% |
-| OOP-heavy | 40.5% | ≥40% |
-| Boilerplate-heavy | 45.9% | ≥55% |
+| Code Type | Avg Saving | Target | Status |
+|-----------|-----------|--------|--------|
+| Algorithmic (RosettaCode) | 16.9% | ≥40% | Below target (inherent limit) |
+| Real-world (Group B) | **38.2%** | ≥40% | Near target |
+| OOP-heavy | **41.6%** | ≥40% | **Met** |
+| Boilerplate-heavy | **46.1%** | ≥55% | Below target |
+
+### Phase 4 Iterations
+
+| Iteration | Change | Before | After | Delta |
+|-----------|--------|--------|-------|-------|
+| Baseline | - | - | 38.0% | - |
+| Iter 1 | `;^` → `^`, `@dc class` → `@dc`, `super` → `sup` | 38.0% | 38.2% | +0.2pp |
+
+Further micro-optimizations tested but yielded <0.1% each:
+- `isinstance` → `isi`: +2 tokens
+- `.append` → `.ap`: 0 tokens (cl100k merges anyway)
+- `True/False/None` → `T/F/nil`: 0 tokens (already 1 token each)
+- Space removal around keywords: marginal (cl100k absorbs spaces)
 
 ## Why Algorithmic Code Saves Less
 
