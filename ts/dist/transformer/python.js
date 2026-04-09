@@ -215,6 +215,10 @@ function transformDecoratedDef(node) {
     const cd = child(node, "classDecl");
     if (cd)
         return transformClassDecl(cd, decorators);
+    // @dc shorthand: dcClassDecl (class without `class` keyword)
+    const dcd = child(node, "dcClassDecl");
+    if (dcd)
+        return transformClassDecl(dcd, decorators);
     const fd = child(node, "funcDef");
     if (fd)
         return transformFuncDef(fd, decorators, isAsync);
@@ -1515,7 +1519,15 @@ function transformAtom(node) {
         return resolveIdentExpr(ident);
     return { kind: "Ident", name: "_" };
 }
+// Identifier abbreviation expansion: "sup" → "super"
+const IDENT_ABBREV_EXPAND = {
+    sup: "super",
+};
 function resolveIdentExpr(name) {
+    // Check identifier abbreviations first
+    const expanded = IDENT_ABBREV_EXPAND[name];
+    if (expanded)
+        return { kind: "Ident", name: expanded };
     const alias = resolveAlias(name);
     if (alias) {
         // Expand alias: "jd" → "json.dumps"

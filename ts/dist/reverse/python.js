@@ -1370,21 +1370,32 @@ function emitParam(p) {
 // ---------------------------------------------------------------------------
 function emitClassDecl(cd) {
     let s = "";
+    // Bases and keywords (computed early to decide @dc class elision)
+    const baseExprs = (cd.bases || []).map(pyExprToAETP);
+    const kwExprs = (cd.keywords || []).map(kw => `${kw.key}=${pyExprToAETP(kw.value)}`);
+    const allArgs = [...baseExprs, ...kwExprs];
+    // Check if class has @dc decorator and no bases — if so, we can omit the `class` keyword.
+    // When bases are present (e.g., @dc ClassName(Base)), we keep `class` to avoid ambiguity
+    // with funcDef patterns like `funcName(params){...}`.
+    const hasDcDecorator = allArgs.length === 0 && (cd.decorators || []).some(dec => {
+        const abbrev = emitDecoratorExpr(dec.expr);
+        return abbrev === "dc";
+    });
     // Decorators
     for (const dec of cd.decorators || []) {
         s += `@${emitDecoratorExpr(dec.expr)} `;
     }
-    s += `class ${cd.name}`;
-    // Bases and keywords
-    const baseExprs = (cd.bases || []).map(pyExprToAETP);
-    const kwExprs = (cd.keywords || []).map(kw => `${kw.key}=${pyExprToAETP(kw.value)}`);
-    const allArgs = [...baseExprs, ...kwExprs];
+    // Omit `class` keyword when @dc is present and there are no bases (implies class)
+    if (!hasDcDecorator) {
+        s += "class ";
+    }
+    s += cd.name;
     if (allArgs.length > 0) {
         s += `(${allArgs.join(",")})`;
     }
     // Body
     const bodyParts = cd.body.map(pyNodeToAETP).filter(s => s && s !== "");
-    s += `{${bodyParts.join(";")}}`;
+    s += `{${joinStmtsCompressed(bodyParts)}}`;
     return s;
 }
 // ---------------------------------------------------------------------------
@@ -1507,7 +1518,31 @@ function emitMatchStmt(node) {
 // Block → AET-Python string
 // ---------------------------------------------------------------------------
 function pyBlockToAETP(block) {
-    return block.stmts.map(pyNodeToAETP).filter(s => s !== "").join(";");
+    return joinStmtsCompressed(block.stmts.map(pyNodeToAETP).filter(s => s !== ""));
+}
+/**
+ * Join statement strings with `;`, but omit `;` before `^` (return) when the previous
+ * statement ends with `}` (block-ending statements like if/for/while/try/with/match).
+ * We cannot omit `;` before `^` after expression or assignment statements because
+ * `^` is also the XOR operator and the parser would try to parse `expr ^ return_value`
+ * as a XOR expression.
+ */
+function joinStmtsCompressed(parts) {
+    if (parts.length === 0)
+        return "";
+    let result = parts[0];
+    for (let i = 1; i < parts.length; i++) {
+        // Skip `;` separator when next statement starts with `^` (return)
+        // AND previous statement ends with `}` (unambiguous block end)
+        if (parts[i].startsWith("^") && parts[i - 1].endsWith("}")) {
+            // No separator needed — `}^` is unambiguous
+        }
+        else {
+            result += ";";
+        }
+        result += parts[i];
+    }
+    return result;
 }
 // ---------------------------------------------------------------------------
 // Operator precedence (higher number = tighter binding)
@@ -1555,10 +1590,14 @@ function needsParens(child, parentPrec, side, parentOp) {
 // ---------------------------------------------------------------------------
 // Expression → AET-Python string
 // ---------------------------------------------------------------------------
+// Identifier abbreviations for common builtins
+const IDENT_ABBREV = {
+    super: "sup",
+};
 function pyExprToAETP(expr) {
     switch (expr.kind) {
         case "Ident":
-            return expr.name;
+            return IDENT_ABBREV[expr.name] || expr.name;
         case "BasicLit":
             return expr.value;
         case "CompositeLit": {

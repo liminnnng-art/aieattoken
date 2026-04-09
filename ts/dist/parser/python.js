@@ -321,6 +321,9 @@ export class AETPythonParser extends CstParser {
         });
         this.OR([
             { ALT: () => this.SUBRULE(this.classDecl) },
+            // @dc shorthand: class decl without `class` keyword (Ident '{' or Ident '(')
+            { GATE: () => this.isDcClassDecl(),
+                ALT: () => this.SUBRULE(this.dcClassDecl) },
             { GATE: () => this.LA(1).tokenType === Async,
                 ALT: () => {
                     this.CONSUME(Async);
@@ -347,6 +350,19 @@ export class AETPythonParser extends CstParser {
     // classDecl: 'class' IDENT ('(' callArgs ')')? '{' classBody '}'
     classDecl = this.RULE("classDecl", () => {
         this.CONSUME(Class);
+        this.CONSUME(Ident);
+        this.OPTION(() => {
+            this.CONSUME(LParen);
+            this.OPTION2(() => this.SUBRULE(this.callArgs));
+            this.CONSUME(RParen);
+        });
+        this.CONSUME(LBrace);
+        this.SUBRULE(this.classBody);
+        this.CONSUME(RBrace);
+    });
+    // dcClassDecl: IDENT ('(' callArgs ')')? '{' classBody '}'
+    // Used after @dc decorator — 'class' keyword is omitted
+    dcClassDecl = this.RULE("dcClassDecl", () => {
         this.CONSUME(Ident);
         this.OPTION(() => {
             this.CONSUME(LParen);
@@ -532,6 +548,7 @@ export class AETPythonParser extends CstParser {
     });
     // ─────────────── Statement List ───────────────
     // stmtList: (stmt ';'?)*
+    // Note: '^' (Caret/return) can start a new statement without a preceding ';'
     stmtList = this.RULE("stmtList", () => {
         this.MANY(() => {
             this.SUBRULE(this.stmt);
@@ -1730,6 +1747,20 @@ export class AETPythonParser extends CstParser {
             return false;
         const t3 = this.LA(3);
         return t3 !== undefined && t3.tokenType === LBrace;
+    }
+    // Check if @dc class shorthand: IDENT '{' (without `class` keyword, not a funcDef).
+    // Only matches IDENT '{' pattern (class without bases). Classes with bases like
+    // IDENT '(' ... ')' '{' are ambiguous with funcDef, so those are NOT matched here —
+    // they still need the `class` keyword.
+    isDcClassDecl() {
+        const t1 = this.LA(1);
+        if (!t1 || t1.tokenType !== Ident)
+            return false;
+        const t2 = this.LA(2);
+        if (!t2)
+            return false;
+        // Only IDENT '{' — unambiguously a class (funcDef always has '(' after name)
+        return t2.tokenType === LBrace;
     }
     // Check if 'slots' '(' pattern
     isSlotsDecl() {

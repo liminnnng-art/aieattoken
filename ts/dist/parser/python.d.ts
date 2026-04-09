@@ -118,6 +118,7 @@ export declare class AETPythonParser extends CstParser {
     private decoratedDef;
     private decoratorExpr;
     private classDecl;
+    private dcClassDecl;
     private classBody;
     private classMember;
     private slotsDecl;
@@ -205,6 +206,7 @@ export declare class AETPythonParser extends CstParser {
     private isFuncDef;
     private isFuncDefFull;
     private isMainBlock;
+    private isDcClassDecl;
     private isSlotsDecl;
     private isWalrusExpr;
     private isLambdaExpr;
