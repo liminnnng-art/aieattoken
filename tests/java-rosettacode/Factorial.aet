@@ -1,1 +1,1 @@
-!v3;factorial(n:int)->int64{if (n==0){^1};^n*factorial(n-1)};main(args:[]string){for i:=0;i<=16;i++{pf("%d! = %d%n",i,factorial(i))}}
+!java-v1;factorial(int n)->long{if n==0{^1};n*factorial(n-1)};main(){for(i:=0;i<=16;i++){pf("%d! = %d%n",i,factorial(i))}}

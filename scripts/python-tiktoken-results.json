@@ -1,0 +1,4893 @@
+[
+  {
+    "file": "tests/python-real-world/fizzbuzz.py",
+    "lines": 51,
+    "non_empty_lines": 38,
+    "total_cl100k_tokens": 388,
+    "category_breakdown": {
+      "docstring": {
+        "count": 4,
+        "cl100k_tokens": 113,
+        "examples": [
+          "\"\"\"FizzBuzz CLI tool with configurable range and divisors.\"\"\"",
+          "\"\"\"Yield FizzBuzz results from 1 to n inclusive.\n\n    Args:\n        n: Upper bound of the range (inclusive).\n        fizz: Divisor for \"Fizz\" (default 3).\n        buzz: Divisor for \"Buzz\" (default 5).\n\n    Yields:\n        \"Fizz\", \"Buzz\", \"FizzBuzz\", or the number as a string.\n    \"\"\"",
+          "\"\"\"Parse command-line arguments.\"\"\"",
+          "\"\"\"Entry point. Returns 0 on success, 1 on error.\"\"\""
+        ]
+      },
+      "whitespace": {
+        "count": 41,
+        "cl100k_tokens": 2,
+        "examples": []
+      },
+      "keyword": {
+        "count": 26,
+        "cl100k_tokens": 26,
+        "examples": [
+          "import",
+          "from",
+          "def",
+          "for",
+          "in",
+          "if",
+          "yield",
+          "or",
+          "None",
+          "type"
+        ]
+      },
+      "identifier": {
+        "count": 65,
+        "cl100k_tokens": 84,
+        "examples": [
+          "argparse",
+          "sys",
+          "typing",
+          "Iterator",
+          "fizzbuzz",
+          "n",
+          "fizz",
+          "buzz",
+          "i",
+          "label"
+        ]
+      },
+      "delimiter": {
+        "count": 77,
+        "cl100k_tokens": 77,
+        "examples": [
+          "(",
+          ":",
+          ",",
+          ")",
+          "[",
+          "]",
+          ".",
+          "{",
+          "}"
+        ]
+      },
+      "builtin": {
+        "count": 14,
+        "cl100k_tokens": 14,
+        "examples": [
+          "int",
+          "str",
+          "range",
+          "list",
+          "print"
+        ]
+      },
+      "operator": {
+        "count": 31,
+        "cl100k_tokens": 31,
+        "examples": [
+          "=",
+          "->",
+          "+",
+          "%",
+          "==",
+          "+=",
+          "|",
+          "<"
+        ]
+      },
+      "number_literal": {
+        "count": 11,
+        "cl100k_tokens": 11,
+        "examples": [
+          "3",
+          "5",
+          "1",
+          "0"
+        ]
+      },
+      "indentation": {
+        "count": 18,
+        "cl100k_tokens": 2,
+        "examples": [
+          "    ",
+          "        ",
+          "            "
+        ]
+      },
+      "string_literal": {
+        "count": 11,
+        "cl100k_tokens": 43,
+        "examples": [
+          "\"\"",
+          "\"Fizz\"",
+          "\"Buzz\"",
+          "\"Print FizzBuzz sequence.\"",
+          "\"n\"",
+          "\"Upper bound (inclusive)\"",
+          "\"--fizz\"",
+          "\"Fizz divisor\"",
+          "\"--buzz\"",
+          "\"Buzz divisor\""
+        ]
+      },
+      "other": {
+        "count": 3,
+        "cl100k_tokens": 14,
+        "examples": [
+          "f\"",
+          "Error: n must be >= 1, got ",
+          "\""
+        ]
+      },
+      "magic_method": {
+        "count": 1,
+        "cl100k_tokens": 3,
+        "examples": [
+          "__name__"
+        ]
+      }
+    },
+    "summary": {
+      "total_tokens": 388,
+      "keyword_tokens": 26,
+      "keyword_pct": "6.7",
+      "identifier_tokens": 84,
+      "identifier_pct": "21.6",
+      "self_tokens": 0,
+      "self_pct": "0.0",
+      "docstring_tokens": 113,
+      "docstring_pct": "29.1",
+      "import_tokens": 8,
+      "import_pct": "2.1",
+      "decorator_tokens": 0,
+      "decorator_pct": "0.0",
+      "type_hint_tokens": 19,
+      "type_hint_pct": "4.9"
+    },
+    "keyword_frequency": {
+      "import": 3,
+      "from": 1,
+      "def": 3,
+      "for": 2,
+      "in": 2,
+      "if": 4,
+      "yield": 1,
+      "or": 1,
+      "None": 2,
+      "type": 3,
+      "return": 3,
+      "raise": 1
+    },
+    "self_info": {
+      "self_param": 0,
+      "self_attr": 0,
+      "self_method": 0,
+      "total_self": 0
+    },
+    "structure_info": {
+      "structures": {
+        "import": 2,
+        "from_import": 1,
+        "def": 3,
+        "return_annotation": 3,
+        "param_annotation": 4,
+        "if": 4,
+        "for": 2,
+        "return": 3,
+        "raise": 1,
+        "yield": 1,
+        "fstring": 1
+      },
+      "imports": [
+        "argparse",
+        "sys",
+        "from typing"
+      ],
+      "decorator_count": 0,
+      "type_hint_count": 7
+    },
+    "indent_info": {
+      "total_indent_spaces": 180,
+      "indented_lines": 30,
+      "total_lines": 38,
+      "max_indent_level": 3,
+      "indent_distribution": {
+        "1": 17,
+        "2": 11,
+        "3": 2
+      }
+    },
+    "docstring_info": {
+      "count": 4,
+      "total_tokens": 113
+    },
+    "top_identifiers": [
+      [
+        "args",
+        {
+          "frequency": 6,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "n",
+        {
+          "frequency": 5,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "parser",
+        {
+          "frequency": 5,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "fizz",
+        {
+          "frequency": 4,
+          "cl100k_tokens": 2
+        }
+      ],
+      [
+        "buzz",
+        {
+          "frequency": 4,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "i",
+        {
+          "frequency": 4,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "label",
+        {
+          "frequency": 4,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "argparse",
+        {
+          "frequency": 3,
+          "cl100k_tokens": 2
+        }
+      ],
+      [
+        "parse_args",
+        {
+          "frequency": 3,
+          "cl100k_tokens": 2
+        }
+      ],
+      [
+        "add_argument",
+        {
+          "frequency": 3,
+          "cl100k_tokens": 2
+        }
+      ],
+      [
+        "help",
+        {
+          "frequency": 3,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "sys",
+        {
+          "frequency": 2,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "Iterator",
+        {
+          "frequency": 2,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "fizzbuzz",
+        {
+          "frequency": 2,
+          "cl100k_tokens": 3
+        }
+      ],
+      [
+        "argv",
+        {
+          "frequency": 2,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "default",
+        {
+          "frequency": 2,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "main",
+        {
+          "frequency": 2,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "line",
+        {
+          "frequency": 2,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "typing",
+        {
+          "frequency": 1,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "Namespace",
+        {
+          "frequency": 1,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "ArgumentParser",
+        {
+          "frequency": 1,
+          "cl100k_tokens": 2
+        }
+      ],
+      [
+        "description",
+        {
+          "frequency": 1,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "file",
+        {
+          "frequency": 1,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "stderr",
+        {
+          "frequency": 1,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "SystemExit",
+        {
+          "frequency": 1,
+          "cl100k_tokens": 2
+        }
+      ]
+    ]
+  },
+  {
+    "file": "tests/python-real-world/csv_reader.py",
+    "lines": 85,
+    "non_empty_lines": 65,
+    "total_cl100k_tokens": 662,
+    "category_breakdown": {
+      "docstring": {
+        "count": 6,
+        "cl100k_tokens": 94,
+        "examples": [
+          "\"\"\"Read a CSV of sales records, filter by minimum amount, and print a summary.\"\"\"",
+          "\"\"\"A single row from the sales CSV.\"\"\"",
+          "\"\"\"Read a CSV file and return a list of SaleRecord objects.\n\n    Expected columns: date, product, quantity, unit_price\n    \"\"\"",
+          "\"\"\"Return records whose line total meets or exceeds the threshold.\"\"\"",
+          "\"\"\"Print a human-readable summary of the given records.\"\"\"",
+          "\"\"\"Entry point: expects a CSV path and an optional minimum total filter.\"\"\""
+        ]
+      },
+      "whitespace": {
+        "count": 81,
+        "cl100k_tokens": 4,
+        "examples": []
+      },
+      "keyword": {
+        "count": 45,
+        "cl100k_tokens": 45,
+        "examples": [
+          "import",
+          "from",
+          "True",
+          "class",
+          "def",
+          "return",
+          "with",
+          "as",
+          "for",
+          "in"
+        ]
+      },
+      "identifier": {
+        "count": 119,
+        "cl100k_tokens": 157,
+        "examples": [
+          "csv",
+          "sys",
+          "dataclasses",
+          "dataclass",
+          "pathlib",
+          "Path",
+          "frozen",
+          "slots",
+          "SaleRecord",
+          "date"
+        ]
+      },
+      "operator": {
+        "count": 32,
+        "cl100k_tokens": 32,
+        "examples": [
+          "@",
+          "=",
+          "->",
+          "*",
+          ">=",
+          "<",
+          ">",
+          "=="
+        ]
+      },
+      "delimiter": {
+        "count": 198,
+        "cl100k_tokens": 198,
+        "examples": [
+          "(",
+          ",",
+          ")",
+          ":",
+          ".",
+          "[",
+          "]",
+          "{",
+          "}"
+        ]
+      },
+      "indentation": {
+        "count": 30,
+        "cl100k_tokens": 3,
+        "examples": [
+          "    ",
+          "        ",
+          ""
+        ]
+      },
+      "builtin": {
+        "count": 30,
+        "cl100k_tokens": 30,
+        "examples": [
+          "str",
+          "int",
+          "float",
+          "property",
+          "list",
+          "open",
+          "print",
+          "sum",
+          "len"
+        ]
+      },
+      "self": {
+        "count": 3,
+        "cl100k_tokens": 3,
+        "examples": [
+          "self"
+        ]
+      },
+      "string_literal": {
+        "count": 17,
+        "cl100k_tokens": 57,
+        "examples": [
+          "\"\"",
+          "\"utf-8\"",
+          "\"date\"",
+          "\"product\"",
+          "\"quantity\"",
+          "\"unit_price\"",
+          "\"No records match the filter.\"",
+          "'Date'",
+          "'Product'",
+          "'Qty'"
+        ]
+      },
+      "other": {
+        "count": 41,
+        "cl100k_tokens": 90,
+        "examples": [
+          "f\"",
+          "<12",
+          " ",
+          "<20",
+          ">5",
+          ">8",
+          ">10",
+          "\"",
+          ">8.2f",
+          ">10.2f"
+        ]
+      },
+      "number_literal": {
+        "count": 12,
+        "cl100k_tokens": 14,
+        "examples": [
+          "57",
+          "2",
+          "0",
+          "1",
+          "0.0"
+        ]
+      },
+      "magic_method": {
+        "count": 1,
+        "cl100k_tokens": 3,
+        "examples": [
+          "__name__"
+        ]
+      }
+    },
+    "summary": {
+      "total_tokens": 662,
+      "keyword_tokens": 45,
+      "keyword_pct": "6.8",
+      "identifier_tokens": 157,
+      "identifier_pct": "23.7",
+      "self_tokens": 3,
+      "self_pct": "0.5",
+      "docstring_tokens": 94,
+      "docstring_pct": "14.2",
+      "import_tokens": 14,
+      "import_pct": "2.1",
+      "decorator_tokens": 13,
+      "decorator_pct": "2.0",
+      "type_hint_tokens": 35,
+      "type_hint_pct": "5.3"
+    },
+    "keyword_frequency": {
+      "import": 4,
+      "from": 2,
+      "True": 2,
+      "class": 1,
+      "def": 5,
+      "return": 8,
+      "with": 1,
+      "as": 2,
+      "for": 4,
+      "in": 4,
+      "if": 5,
+      "None": 1,
+      "not": 1,
+      "else": 1,
+      "try": 1,
+      "except": 2,
+      "raise": 1
+    },
+    "self_info": {
+      "self_param": 1,
+      "self_attr": 2,
+      "self_method": 0,
+      "total_self": 3
+    },
+    "structure_info": {
+      "structures": {
+        "import": 2,
+        "from_import": 2,
+        "class": 1,
+        "class_decorator": 1,
+        "def": 5,
+        "return_annotation": 5,
+        "param_annotation": 4,
+        "if": 3,
+        "decorator": 1,
+        "with": 1,
+        "return": 8,
+        "for": 2,
+        "try": 1,
+        "raise": 1,
+        "list_comp": 1,
+        "except": 2,
+        "generator_exp": 1,
+        "fstring": 20,
+        "self_attr": 2
+      },
+      "imports": [
+        "csv",
+        "sys",
+        "from dataclasses",
+        "from pathlib"
+      ],
+      "decorator_count": 1,
+      "type_hint_count": 9
+    },
+    "indent_info": {
+      "total_indent_spaces": 328,
+      "indented_lines": 53,
+      "total_lines": 65,
+      "max_indent_level": 4,
+      "indent_distribution": {
+        "1": 34,
+        "2": 13,
+        "3": 2,
+        "4": 4
+      }
+    },
+    "docstring_info": {
+      "count": 6,
+      "total_tokens": 94
+    },
+    "top_identifiers": [
+      [
+        "records",
+        {
+          "frequency": 12,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "r",
+        {
+          "frequency": 11,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "sys",
+        {
+          "frequency": 9,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "SaleRecord",
+        {
+          "frequency": 7,
+          "cl100k_tokens": 2
+        }
+      ],
+      [
+        "row",
+        {
+          "frequency": 5,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "argv",
+        {
+          "frequency": 5,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "quantity",
+        {
+          "frequency": 4,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "unit_price",
+        {
+          "frequency": 4,
+          "cl100k_tokens": 2
+        }
+      ],
+      [
+        "total",
+        {
+          "frequency": 4,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "Path",
+        {
+          "frequency": 3,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "date",
+        {
+          "frequency": 3,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "product",
+        {
+          "frequency": 3,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "file",
+        {
+          "frequency": 3,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "stderr",
+        {
+          "frequency": 3,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "csv_path",
+        {
+          "frequency": 3,
+          "cl100k_tokens": 2
+        }
+      ],
+      [
+        "csv",
+        {
+          "frequency": 2,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "dataclass",
+        {
+          "frequency": 2,
+          "cl100k_tokens": 2
+        }
+      ],
+      [
+        "load_records",
+        {
+          "frequency": 2,
+          "cl100k_tokens": 2
+        }
+      ],
+      [
+        "path",
+        {
+          "frequency": 2,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "fh",
+        {
+          "frequency": 2,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "reader",
+        {
+          "frequency": 2,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "filter_by_min_total",
+        {
+          "frequency": 2,
+          "cl100k_tokens": 4
+        }
+      ],
+      [
+        "threshold",
+        {
+          "frequency": 2,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "print_summary",
+        {
+          "frequency": 2,
+          "cl100k_tokens": 2
+        }
+      ],
+      [
+        "grand_total",
+        {
+          "frequency": 2,
+          "cl100k_tokens": 2
+        }
+      ],
+      [
+        "main",
+        {
+          "frequency": 2,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "min_total",
+        {
+          "frequency": 2,
+          "cl100k_tokens": 2
+        }
+      ],
+      [
+        "exc",
+        {
+          "frequency": 2,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "filtered",
+        {
+          "frequency": 2,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "dataclasses",
+        {
+          "frequency": 1,
+          "cl100k_tokens": 2
+        }
+      ]
+    ]
+  },
+  {
+    "file": "tests/python-real-world/calculator.py",
+    "lines": 113,
+    "non_empty_lines": 89,
+    "total_cl100k_tokens": 674,
+    "category_breakdown": {
+      "docstring": {
+        "count": 7,
+        "cl100k_tokens": 145,
+        "examples": [
+          "\"\"\"A simple interactive calculator with operator dispatch via match/case.\"\"\"",
+          "\"\"\"Raised when the calculator encounters an invalid operation.\"\"\"",
+          "\"\"\"Stateful calculator that tracks a running result and history.\n\n    Supports +, -, *, /, and ** (power) operators.\n    \"\"\"",
+          "\"\"\"Apply an operator with the given operand to the current result.\n\n        Args:\n            operator: One of '+', '-', '*', '/', '**'.\n            operand: The right-hand side value.\n\n        Returns:\n            The new result after applying the operation.\n\n        Raises:\n            CalculatorError: On division by zero or unknown operator.\n        \"\"\"",
+          "\"\"\"Reset the result to zero and clear history.\"\"\"",
+          "\"\"\"Print the full operation history.\"\"\"",
+          "\"\"\"Run an interactive read-eval-print loop.\"\"\""
+        ]
+      },
+      "whitespace": {
+        "count": 98,
+        "cl100k_tokens": 5,
+        "examples": []
+      },
+      "keyword": {
+        "count": 50,
+        "cl100k_tokens": 50,
+        "examples": [
+          "from",
+          "import",
+          "class",
+          "def",
+          "match",
+          "case",
+          "if",
+          "raise",
+          "return",
+          "None"
+        ]
+      },
+      "identifier": {
+        "count": 96,
+        "cl100k_tokens": 115,
+        "examples": [
+          "dataclasses",
+          "dataclass",
+          "field",
+          "CalculatorError",
+          "Exception",
+          "Calculator",
+          "result",
+          "history",
+          "default_factory",
+          "apply"
+        ]
+      },
+      "delimiter": {
+        "count": 162,
+        "cl100k_tokens": 162,
+        "examples": [
+          ",",
+          "(",
+          ")",
+          ":",
+          "[",
+          "]",
+          ".",
+          "{",
+          "}"
+        ]
+      },
+      "indentation": {
+        "count": 58,
+        "cl100k_tokens": 7,
+        "examples": [
+          "    ",
+          "",
+          "    "
+        ]
+      },
+      "operator": {
+        "count": 30,
+        "cl100k_tokens": 31,
+        "examples": [
+          "@",
+          "=",
+          "->",
+          "+=",
+          "-=",
+          "*=",
+          "==",
+          "/=",
+          "**=",
+          "!"
+        ]
+      },
+      "builtin": {
+        "count": 21,
+        "cl100k_tokens": 21,
+        "examples": [
+          "float",
+          "list",
+          "str",
+          "print",
+          "enumerate",
+          "input",
+          "len"
+        ]
+      },
+      "number_literal": {
+        "count": 6,
+        "cl100k_tokens": 10,
+        "examples": [
+          "0.0",
+          "0",
+          "1",
+          "2"
+        ]
+      },
+      "self": {
+        "count": 16,
+        "cl100k_tokens": 16,
+        "examples": [
+          "self"
+        ]
+      },
+      "string_literal": {
+        "count": 14,
+        "cl100k_tokens": 76,
+        "examples": [
+          "\"+\"",
+          "\"-\"",
+          "\"*\"",
+          "\"/\"",
+          "\"Division by zero\"",
+          "\"**\"",
+          "\"(no history)\"",
+          "\"Calculator  (type 'q' to quit, 'h' for history, 'c' to clear)\"",
+          "\"> \"",
+          "\"q\""
+        ]
+      },
+      "other": {
+        "count": 27,
+        "cl100k_tokens": 55,
+        "examples": [
+          "f\"",
+          "Unknown operator: ",
+          "\"",
+          " ",
+          " = ",
+          "  ",
+          ". ",
+          "  = ",
+          "  Error: invalid number: ",
+          "  Error: "
+        ]
+      },
+      "magic_method": {
+        "count": 1,
+        "cl100k_tokens": 3,
+        "examples": [
+          "__name__"
+        ]
+      }
+    },
+    "summary": {
+      "total_tokens": 674,
+      "keyword_tokens": 50,
+      "keyword_pct": "7.4",
+      "identifier_tokens": 115,
+      "identifier_pct": "17.1",
+      "self_tokens": 16,
+      "self_pct": "2.4",
+      "docstring_tokens": 145,
+      "docstring_pct": "21.5",
+      "import_tokens": 8,
+      "import_pct": "1.2",
+      "decorator_tokens": 3,
+      "decorator_pct": "0.4",
+      "type_hint_tokens": 21,
+      "type_hint_pct": "3.1"
+    },
+    "keyword_frequency": {
+      "from": 1,
+      "import": 1,
+      "class": 2,
+      "def": 4,
+      "match": 1,
+      "case": 6,
+      "if": 8,
+      "raise": 2,
+      "return": 2,
+      "None": 3,
+      "not": 2,
+      "for": 1,
+      "in": 1,
+      "while": 1,
+      "True": 1,
+      "try": 3,
+      "except": 3,
+      "break": 2,
+      "continue": 5,
+      "as": 1
+    },
+    "self_info": {
+      "self_param": 3,
+      "self_attr": 13,
+      "self_method": 0,
+      "total_self": 16
+    },
+    "structure_info": {
+      "structures": {
+        "from_import": 1,
+        "class": 2,
+        "inheritance": 1,
+        "class_decorator": 1,
+        "def": 4,
+        "return_annotation": 4,
+        "if": 8,
+        "param_annotation": 2,
+        "while": 1,
+        "match": 1,
+        "return": 2,
+        "for": 1,
+        "try": 3,
+        "self_attr": 13,
+        "fstring": 8,
+        "except": 3,
+        "raise": 2
+      },
+      "imports": [
+        "from dataclasses"
+      ],
+      "decorator_count": 0,
+      "type_hint_count": 6
+    },
+    "indent_info": {
+      "total_indent_spaces": 788,
+      "indented_lines": 82,
+      "total_lines": 89,
+      "max_indent_level": 5,
+      "indent_distribution": {
+        "1": 15,
+        "2": 28,
+        "3": 31,
+        "4": 7,
+        "5": 1
+      }
+    },
+    "docstring_info": {
+      "count": 7,
+      "total_tokens": 145
+    },
+    "top_identifiers": [
+      [
+        "result",
+        {
+          "frequency": 14,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "operand",
+        {
+          "frequency": 8,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "calc",
+        {
+          "frequency": 6,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "line",
+        {
+          "frequency": 6,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "history",
+        {
+          "frequency": 5,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "CalculatorError",
+        {
+          "frequency": 4,
+          "cl100k_tokens": 2
+        }
+      ],
+      [
+        "operator",
+        {
+          "frequency": 4,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "lower",
+        {
+          "frequency": 3,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "parts",
+        {
+          "frequency": 3,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "raw_value",
+        {
+          "frequency": 3,
+          "cl100k_tokens": 2
+        }
+      ],
+      [
+        "dataclass",
+        {
+          "frequency": 2,
+          "cl100k_tokens": 2
+        }
+      ],
+      [
+        "field",
+        {
+          "frequency": 2,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "Calculator",
+        {
+          "frequency": 2,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "apply",
+        {
+          "frequency": 2,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "prev",
+        {
+          "frequency": 2,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "r",
+        {
+          "frequency": 2,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "reset",
+        {
+          "frequency": 2,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "show_history",
+        {
+          "frequency": 2,
+          "cl100k_tokens": 2
+        }
+      ],
+      [
+        "i",
+        {
+          "frequency": 2,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "entry",
+        {
+          "frequency": 2,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "repl",
+        {
+          "frequency": 2,
+          "cl100k_tokens": 2
+        }
+      ],
+      [
+        "op",
+        {
+          "frequency": 2,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "value",
+        {
+          "frequency": 2,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "exc",
+        {
+          "frequency": 2,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "dataclasses",
+        {
+          "frequency": 1,
+          "cl100k_tokens": 2
+        }
+      ],
+      [
+        "Exception",
+        {
+          "frequency": 1,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "default_factory",
+        {
+          "frequency": 1,
+          "cl100k_tokens": 2
+        }
+      ],
+      [
+        "_",
+        {
+          "frequency": 1,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "append",
+        {
+          "frequency": 1,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "clear",
+        {
+          "frequency": 1,
+          "cl100k_tokens": 1
+        }
+      ]
+    ]
+  },
+  {
+    "file": "tests/python-real-world/flask_api.py",
+    "lines": 179,
+    "non_empty_lines": 139,
+    "total_cl100k_tokens": 1257,
+    "category_breakdown": {
+      "docstring": {
+        "count": 7,
+        "cl100k_tokens": 91,
+        "examples": [
+          "\"\"\"\nA Flask-like REST API handler with a simple class-based router.\nSimulates routing, JSON handling, error responses, decorators, and type hints.\n\"\"\"",
+          "\"\"\"Decorator that validates the request has a JSON content type.\"\"\"",
+          "\"\"\"Decorator that logs request method and path.\"\"\"",
+          "\"\"\"Simple router that maps (method, path) pairs to handler functions.\"\"\"",
+          "\"\"\"Return all users as a JSON array.\"\"\"",
+          "\"\"\"Create a new user from JSON body.\"\"\"",
+          "\"\"\"Simple health-check endpoint.\"\"\""
+        ]
+      },
+      "whitespace": {
+        "count": 175,
+        "cl100k_tokens": 7,
+        "examples": []
+      },
+      "keyword": {
+        "count": 86,
+        "cl100k_tokens": 86,
+        "examples": [
+          "from",
+          "import",
+          "class",
+          "None",
+          "def",
+          "if",
+          "is",
+          "raise",
+          "return",
+          "lambda"
+        ]
+      },
+      "magic_method": {
+        "count": 3,
+        "cl100k_tokens": 9,
+        "examples": [
+          "__future__",
+          "__init__",
+          "__name__"
+        ]
+      },
+      "identifier": {
+        "count": 315,
+        "cl100k_tokens": 396,
+        "examples": [
+          "annotations",
+          "json",
+          "functools",
+          "time",
+          "dataclasses",
+          "dataclass",
+          "field",
+          "asdict",
+          "typing",
+          "Any"
+        ]
+      },
+      "delimiter": {
+        "count": 395,
+        "cl100k_tokens": 395,
+        "examples": [
+          ",",
+          "(",
+          ")",
+          ":",
+          "[",
+          "]",
+          ".",
+          "{",
+          "}"
+        ]
+      },
+      "indentation": {
+        "count": 60,
+        "cl100k_tokens": 6,
+        "examples": [
+          "    ",
+          "",
+          "    "
+        ]
+      },
+      "operator": {
+        "count": 96,
+        "cl100k_tokens": 96,
+        "examples": [
+          "=",
+          "@",
+          "->",
+          "-",
+          "*",
+          "|",
+          "==",
+          "+="
+        ]
+      },
+      "number_literal": {
+        "count": 9,
+        "cl100k_tokens": 10,
+        "examples": [
+          "200",
+          "201",
+          "400",
+          "404",
+          "405",
+          "500",
+          "1000",
+          "1"
+        ]
+      },
+      "builtin": {
+        "count": 50,
+        "cl100k_tokens": 50,
+        "examples": [
+          "str",
+          "dict",
+          "int",
+          "staticmethod",
+          "id",
+          "print",
+          "tuple",
+          "list",
+          "any",
+          "len"
+        ]
+      },
+      "self": {
+        "count": 12,
+        "cl100k_tokens": 12,
+        "examples": [
+          "self"
+        ]
+      },
+      "string_literal": {
+        "count": 48,
+        "cl100k_tokens": 194,
+        "examples": [
+          "\"Request body is empty\"",
+          "\"\"",
+          "\"Content-Type\"",
+          "\"application/json\"",
+          "\"error\"",
+          "\"POST\"",
+          "\"PUT\"",
+          "\"Content-Type must be application/json\"",
+          "\"GET\"",
+          "\"Method not allowed\""
+        ]
+      },
+      "other": {
+        "count": 10,
+        "cl100k_tokens": 19,
+        "examples": [
+          "f\"",
+          " ",
+          " -> ",
+          " (",
+          ".1f",
+          "ms)",
+          "\"",
+          "Internal error: "
+        ]
+      },
+      "comment": {
+        "count": 2,
+        "cl100k_tokens": 11,
+        "examples": [
+          "# --- Application setup ---",
+          "# Simulate some API calls"
+        ]
+      }
+    },
+    "summary": {
+      "total_tokens": 1257,
+      "keyword_tokens": 86,
+      "keyword_pct": "6.8",
+      "identifier_tokens": 396,
+      "identifier_pct": "31.5",
+      "self_tokens": 12,
+      "self_pct": "1.0",
+      "docstring_tokens": 91,
+      "docstring_pct": "7.2",
+      "import_tokens": 36,
+      "import_pct": "2.9",
+      "decorator_tokens": 69,
+      "decorator_pct": "5.5",
+      "type_hint_tokens": 100,
+      "type_hint_pct": "8.0"
+    },
+    "keyword_frequency": {
+      "from": 4,
+      "import": 7,
+      "class": 5,
+      "None": 6,
+      "def": 15,
+      "if": 6,
+      "is": 2,
+      "raise": 1,
+      "return": 20,
+      "lambda": 1,
+      "not": 3,
+      "in": 5,
+      "and": 1,
+      "or": 2,
+      "for": 3,
+      "try": 1,
+      "except": 2,
+      "as": 1,
+      "global": 1
+    },
+    "self_info": {
+      "self_param": 5,
+      "self_attr": 6,
+      "self_method": 0,
+      "total_self": 11
+    },
+    "structure_info": {
+      "structures": {
+        "from_import": 4,
+        "import": 3,
+        "class": 5,
+        "inheritance": 1,
+        "class_decorator": 3,
+        "def": 15,
+        "return_annotation": 15,
+        "param_annotation": 15,
+        "decorator": 10,
+        "if": 6,
+        "return": 20,
+        "try": 1,
+        "list_comp": 1,
+        "raise": 1,
+        "self_attr": 6,
+        "for": 1,
+        "except": 2,
+        "lambda": 1,
+        "fstring": 3,
+        "generator_exp": 1
+      },
+      "imports": [
+        "from __future__",
+        "json",
+        "functools",
+        "time",
+        "from dataclasses",
+        "from typing",
+        "from enum"
+      ],
+      "decorator_count": 10,
+      "type_hint_count": 30
+    },
+    "indent_info": {
+      "total_indent_spaces": 624,
+      "indented_lines": 103,
+      "total_lines": 139,
+      "max_indent_level": 4,
+      "indent_distribution": {
+        "1": 64,
+        "2": 27,
+        "3": 10,
+        "4": 2
+      }
+    },
+    "docstring_info": {
+      "count": 7,
+      "total_tokens": 91
+    },
+    "top_identifiers": [
+      [
+        "Response",
+        {
+          "frequency": 21,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "request",
+        {
+          "frequency": 17,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "Request",
+        {
+          "frequency": 12,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "method",
+        {
+          "frequency": 10,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "path",
+        {
+          "frequency": 10,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "body",
+        {
+          "frequency": 10,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "HttpStatus",
+        {
+          "frequency": 9,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "status",
+        {
+          "frequency": 9,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "func",
+        {
+          "frequency": 9,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "RouteHandler",
+        {
+          "frequency": 8,
+          "cl100k_tokens": 2
+        }
+      ],
+      [
+        "app",
+        {
+          "frequency": 8,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "resp",
+        {
+          "frequency": 8,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "json",
+        {
+          "frequency": 7,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "error",
+        {
+          "frequency": 7,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "json_response",
+        {
+          "frequency": 5,
+          "cl100k_tokens": 2
+        }
+      ],
+      [
+        "data",
+        {
+          "frequency": 5,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "name",
+        {
+          "frequency": 5,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "email",
+        {
+          "frequency": 5,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "methods",
+        {
+          "frequency": 5,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "dispatch",
+        {
+          "frequency": 5,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "time",
+        {
+          "frequency": 4,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "dataclass",
+        {
+          "frequency": 4,
+          "cl100k_tokens": 2
+        }
+      ],
+      [
+        "Any",
+        {
+          "frequency": 4,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "headers",
+        {
+          "frequency": 4,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "wrapper",
+        {
+          "frequency": 4,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "get",
+        {
+          "frequency": 4,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "_routes",
+        {
+          "frequency": 4,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "route",
+        {
+          "frequency": 4,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "_users_db",
+        {
+          "frequency": 4,
+          "cl100k_tokens": 2
+        }
+      ],
+      [
+        "_next_id",
+        {
+          "frequency": 4,
+          "cl100k_tokens": 2
+        }
+      ]
+    ]
+  },
+  {
+    "file": "tests/python-real-world/data_processor.py",
+    "lines": 187,
+    "non_empty_lines": 151,
+    "total_cl100k_tokens": 1681,
+    "category_breakdown": {
+      "docstring": {
+        "count": 12,
+        "cl100k_tokens": 146,
+        "examples": [
+          "\"\"\"\nData processing pipeline: reads structured data, transforms, filters,\naggregates, and writes results. Demonstrates comprehensions, typing,\ndataclasses, pathlib, json, and collections usage.\n\"\"\"",
+          "\"\"\"A single sales transaction.\"\"\"",
+          "\"\"\"Aggregated stats for a grouping key.\"\"\"",
+          "\"\"\"Load sales records from a JSON file.\"\"\"",
+          "\"\"\"Generate in-memory sample data for demonstration.\"\"\"",
+          "\"\"\"Keep only records whose line total meets the threshold.\"\"\"",
+          "\"\"\"Keep only records in the specified categories.\"\"\"",
+          "\"\"\"Yield each record paired with its running cumulative revenue.\"\"\"",
+          "\"\"\"Group records by category and compute aggregate statistics.\"\"\"",
+          "\"\"\"Build a JSON-serializable summary from aggregated results.\"\"\""
+        ]
+      },
+      "whitespace": {
+        "count": 182,
+        "cl100k_tokens": 7,
+        "examples": []
+      },
+      "keyword": {
+        "count": 84,
+        "cl100k_tokens": 84,
+        "examples": [
+          "from",
+          "import",
+          "True",
+          "class",
+          "def",
+          "return",
+          "if",
+          "not",
+          "raise",
+          "with"
+        ]
+      },
+      "magic_method": {
+        "count": 2,
+        "cl100k_tokens": 6,
+        "examples": [
+          "__future__",
+          "__name__"
+        ]
+      },
+      "identifier": {
+        "count": 306,
+        "cl100k_tokens": 449,
+        "examples": [
+          "annotations",
+          "json",
+          "statistics",
+          "collections",
+          "defaultdict",
+          "dataclasses",
+          "dataclass",
+          "field",
+          "pathlib",
+          "Path"
+        ]
+      },
+      "delimiter": {
+        "count": 524,
+        "cl100k_tokens": 524,
+        "examples": [
+          ",",
+          "(",
+          ")",
+          ":",
+          ".",
+          "[",
+          "]",
+          "{",
+          "}"
+        ]
+      },
+      "operator": {
+        "count": 69,
+        "cl100k_tokens": 69,
+        "examples": [
+          "@",
+          "=",
+          "->",
+          "*",
+          "|",
+          ">=",
+          "+=",
+          "+",
+          "=="
+        ]
+      },
+      "indentation": {
+        "count": 46,
+        "cl100k_tokens": 8,
+        "examples": [
+          "    ",
+          "        ",
+          ""
+        ]
+      },
+      "builtin": {
+        "count": 85,
+        "cl100k_tokens": 85,
+        "examples": [
+          "str",
+          "int",
+          "float",
+          "property",
+          "classmethod",
+          "dict",
+          "list",
+          "open",
+          "enumerate",
+          "set"
+        ]
+      },
+      "self": {
+        "count": 3,
+        "cl100k_tokens": 3,
+        "examples": [
+          "self"
+        ]
+      },
+      "cls": {
+        "count": 2,
+        "cl100k_tokens": 2,
+        "examples": [
+          "cls"
+        ]
+      },
+      "string_literal": {
+        "count": 69,
+        "cl100k_tokens": 291,
+        "examples": [
+          "\"transaction_id\"",
+          "\"product\"",
+          "\"category\"",
+          "\"quantity\"",
+          "\"unit_price\"",
+          "\"region\"",
+          "\"date\"",
+          "\"r\"",
+          "\"utf-8\"",
+          "\"Widget A\""
+        ]
+      },
+      "other": {
+        "count": 35,
+        "cl100k_tokens": 76,
+        "examples": [
+          "f\"",
+          "Data file not found: ",
+          "\"",
+          "T",
+          "04d",
+          "Report written to ",
+          " (",
+          " bytes)",
+          "Loaded ",
+          " records"
+        ]
+      },
+      "number_literal": {
+        "count": 31,
+        "cl100k_tokens": 59,
+        "examples": [
+          "10",
+          "4.99",
+          "5",
+          "7.49",
+          "3",
+          "24.99",
+          "8",
+          "19.99",
+          "20",
+          "1"
+        ]
+      },
+      "comment": {
+        "count": 2,
+        "cl100k_tokens": 15,
+        "examples": [
+          "# type: ignore[arg-type]",
+          "# Show running totals for the filtered set"
+        ]
+      }
+    },
+    "summary": {
+      "total_tokens": 1681,
+      "keyword_tokens": 84,
+      "keyword_pct": "5.0",
+      "identifier_tokens": 449,
+      "identifier_pct": "26.7",
+      "self_tokens": 3,
+      "self_pct": "0.2",
+      "docstring_tokens": 146,
+      "docstring_pct": "8.7",
+      "import_tokens": 36,
+      "import_pct": "2.1",
+      "decorator_tokens": 16,
+      "decorator_pct": "1.0",
+      "type_hint_tokens": 102,
+      "type_hint_pct": "6.1"
+    },
+    "keyword_frequency": {
+      "from": 5,
+      "import": 7,
+      "True": 3,
+      "class": 2,
+      "def": 11,
+      "return": 9,
+      "if": 6,
+      "not": 1,
+      "raise": 1,
+      "with": 2,
+      "as": 2,
+      "for": 15,
+      "in": 16,
+      "yield": 1,
+      "else": 1,
+      "None": 2
+    },
+    "self_info": {
+      "self_param": 1,
+      "self_attr": 2,
+      "self_method": 0,
+      "total_self": 3
+    },
+    "structure_info": {
+      "structures": {
+        "from_import": 5,
+        "import": 2,
+        "class": 2,
+        "class_decorator": 2,
+        "def": 11,
+        "return_annotation": 11,
+        "param_annotation": 13,
+        "if": 3,
+        "decorator": 2,
+        "with": 2,
+        "return": 9,
+        "for": 5,
+        "raise": 1,
+        "list_comp": 7,
+        "yield": 1,
+        "fstring": 11,
+        "self_attr": 2,
+        "generator_exp": 2,
+        "set_comp": 1
+      },
+      "imports": [
+        "from __future__",
+        "json",
+        "statistics",
+        "from collections",
+        "from dataclasses",
+        "from pathlib",
+        "from typing"
+      ],
+      "decorator_count": 2,
+      "type_hint_count": 24
+    },
+    "indent_info": {
+      "total_indent_spaces": 905,
+      "indented_lines": 125,
+      "total_lines": 151,
+      "max_indent_level": 4,
+      "indent_distribution": {
+        "1": 63,
+        "2": 29,
+        "3": 27,
+        "4": 6
+      }
+    },
+    "docstring_info": {
+      "count": 12,
+      "total_tokens": 146
+    },
+    "top_identifiers": [
+      [
+        "SalesRecord",
+        {
+          "frequency": 14,
+          "cl100k_tokens": 2
+        }
+      ],
+      [
+        "r",
+        {
+          "frequency": 14,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "records",
+        {
+          "frequency": 11,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "raw",
+        {
+          "frequency": 10,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "path",
+        {
+          "frequency": 9,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "rec",
+        {
+          "frequency": 9,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "agg",
+        {
+          "frequency": 7,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "filtered",
+        {
+          "frequency": 7,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "Any",
+        {
+          "frequency": 6,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "category",
+        {
+          "frequency": 6,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "total",
+        {
+          "frequency": 6,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "total_revenue",
+        {
+          "frequency": 6,
+          "cl100k_tokens": 3
+        }
+      ],
+      [
+        "categories",
+        {
+          "frequency": 6,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "group",
+        {
+          "frequency": 6,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "aggregates",
+        {
+          "frequency": 6,
+          "cl100k_tokens": 3
+        }
+      ],
+      [
+        "Path",
+        {
+          "frequency": 5,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "Sequence",
+        {
+          "frequency": 5,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "region",
+        {
+          "frequency": 5,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "AggregateResult",
+        {
+          "frequency": 5,
+          "cl100k_tokens": 2
+        }
+      ],
+      [
+        "top_product",
+        {
+          "frequency": 5,
+          "cl100k_tokens": 2
+        }
+      ],
+      [
+        "cumulative",
+        {
+          "frequency": 5,
+          "cl100k_tokens": 2
+        }
+      ],
+      [
+        "json",
+        {
+          "frequency": 4,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "product",
+        {
+          "frequency": 4,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "quantity",
+        {
+          "frequency": 4,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "date",
+        {
+          "frequency": 4,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "key",
+        {
+          "frequency": 4,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "fh",
+        {
+          "frequency": 4,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "product_revenue",
+        {
+          "frequency": 4,
+          "cl100k_tokens": 3
+        }
+      ],
+      [
+        "report",
+        {
+          "frequency": 4,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "min_revenue",
+        {
+          "frequency": 4,
+          "cl100k_tokens": 3
+        }
+      ]
+    ]
+  },
+  {
+    "file": "tests/python-real-world/cli_tool.py",
+    "lines": 257,
+    "non_empty_lines": 208,
+    "total_cl100k_tokens": 1916,
+    "category_breakdown": {
+      "docstring": {
+        "count": 12,
+        "cl100k_tokens": 109,
+        "examples": [
+          "\"\"\"\nCLI tool using argparse with subcommands, file operations, logging,\nand JSON-based configuration management.\n\"\"\"",
+          "\"\"\"Application configuration model.\"\"\"",
+          "\"\"\"Retrieve a value using dot notation like 'metadata.author'.\"\"\"",
+          "\"\"\"Configure the logging format and level.\"\"\"",
+          "\"\"\"Determine the config file path from args or environment.\"\"\"",
+          "\"\"\"Initialize a new configuration file.\"\"\"",
+          "\"\"\"Get a configuration value by key.\"\"\"",
+          "\"\"\"Set a configuration value.\"\"\"",
+          "\"\"\"Display the full configuration.\"\"\"",
+          "\"\"\"Validate the configuration file.\"\"\""
+        ]
+      },
+      "whitespace": {
+        "count": 253,
+        "cl100k_tokens": 10,
+        "examples": []
+      },
+      "keyword": {
+        "count": 131,
+        "cl100k_tokens": 131,
+        "examples": [
+          "from",
+          "import",
+          "class",
+          "False",
+          "def",
+          "if",
+          "not",
+          "return",
+          "with",
+          "as"
+        ]
+      },
+      "magic_method": {
+        "count": 4,
+        "cl100k_tokens": 16,
+        "examples": [
+          "__future__",
+          "__dataclass_fields__",
+          "__name__"
+        ]
+      },
+      "identifier": {
+        "count": 440,
+        "cl100k_tokens": 584,
+        "examples": [
+          "annotations",
+          "argparse",
+          "json",
+          "logging",
+          "os",
+          "sys",
+          "time",
+          "dataclasses",
+          "dataclass",
+          "field"
+        ]
+      },
+      "delimiter": {
+        "count": 544,
+        "cl100k_tokens": 544,
+        "examples": [
+          ",",
+          ".",
+          "(",
+          ")",
+          ":",
+          "[",
+          "]",
+          "{",
+          "}"
+        ]
+      },
+      "operator": {
+        "count": 111,
+        "cl100k_tokens": 111,
+        "examples": [
+          "=",
+          "/",
+          "@",
+          "->",
+          "**",
+          "==",
+          "!"
+        ]
+      },
+      "string_literal": {
+        "count": 82,
+        "cl100k_tokens": 391,
+        "examples": [
+          "\"configctl\"",
+          "\".configctl\"",
+          "\"settings.json\"",
+          "\"1.0.0\"",
+          "\"\"",
+          "\"INFO\"",
+          "\".\"",
+          "\"No config found at %s, using defaults\"",
+          "\"r\"",
+          "\"utf-8\""
+        ]
+      },
+      "indentation": {
+        "count": 92,
+        "cl100k_tokens": 9,
+        "examples": [
+          "    ",
+          "        ",
+          "            "
+        ]
+      },
+      "builtin": {
+        "count": 50,
+        "cl100k_tokens": 53,
+        "examples": [
+          "str",
+          "bool",
+          "list",
+          "dict",
+          "classmethod",
+          "open",
+          "isinstance",
+          "getattr",
+          "format",
+          "hasattr"
+        ]
+      },
+      "cls": {
+        "count": 4,
+        "cl100k_tokens": 4,
+        "examples": [
+          "cls"
+        ]
+      },
+      "self": {
+        "count": 4,
+        "cl100k_tokens": 4,
+        "examples": [
+          "self"
+        ]
+      },
+      "number_literal": {
+        "count": 23,
+        "cl100k_tokens": 23,
+        "examples": [
+          "2",
+          "1",
+          "0"
+        ]
+      },
+      "comment": {
+        "count": 8,
+        "cl100k_tokens": 36,
+        "examples": [
+          "# --- Subcommand handlers ---",
+          "# Parse the value: try JSON first, fall back to string",
+          "# Handle dot-notation for metadata",
+          "# init",
+          "# get",
+          "# set",
+          "# show",
+          "# validate"
+        ]
+      },
+      "other": {
+        "count": 30,
+        "cl100k_tokens": 77,
+        "examples": [
+          "f\"",
+          "Initialized config at ",
+          "\"",
+          "Set ",
+          " = ",
+          "Config written to ",
+          "FAIL: Config file not found at ",
+          "FAIL: Invalid config format - ",
+          "Invalid log_level: ",
+          "FAIL: "
+        ]
+      }
+    },
+    "summary": {
+      "total_tokens": 1916,
+      "keyword_tokens": 131,
+      "keyword_pct": "6.8",
+      "identifier_tokens": 584,
+      "identifier_pct": "30.5",
+      "self_tokens": 4,
+      "self_pct": "0.2",
+      "docstring_tokens": 109,
+      "docstring_pct": "5.7",
+      "import_tokens": 41,
+      "import_pct": "2.1",
+      "decorator_tokens": 6,
+      "decorator_pct": "0.3",
+      "type_hint_tokens": 62,
+      "type_hint_pct": "3.2"
+    },
+    "keyword_frequency": {
+      "from": 4,
+      "import": 10,
+      "class": 1,
+      "False": 1,
+      "def": 12,
+      "if": 21,
+      "not": 7,
+      "return": 24,
+      "with": 2,
+      "as": 4,
+      "for": 5,
+      "in": 9,
+      "None": 8,
+      "True": 2,
+      "else": 5,
+      "is": 3,
+      "and": 5,
+      "or": 1,
+      "try": 3,
+      "except": 3,
+      "elif": 1
+    },
+    "self_info": {
+      "self_param": 2,
+      "self_attr": 0,
+      "self_method": 0,
+      "total_self": 2
+    },
+    "structure_info": {
+      "structures": {
+        "from_import": 4,
+        "import": 6,
+        "class": 1,
+        "class_decorator": 1,
+        "def": 12,
+        "return_annotation": 12,
+        "param_annotation": 11,
+        "if": 19,
+        "decorator": 1,
+        "return": 24,
+        "try": 3,
+        "with": 2,
+        "for": 2,
+        "except": 3,
+        "set_comp": 1,
+        "dict_comp": 2,
+        "fstring": 9
+      },
+      "imports": [
+        "from __future__",
+        "argparse",
+        "json",
+        "logging",
+        "os",
+        "sys",
+        "time",
+        "from dataclasses",
+        "from pathlib",
+        "from typing"
+      ],
+      "decorator_count": 1,
+      "type_hint_count": 23
+    },
+    "indent_info": {
+      "total_indent_spaces": 1048,
+      "indented_lines": 178,
+      "total_lines": 208,
+      "max_indent_level": 4,
+      "indent_distribution": {
+        "1": 108,
+        "2": 59,
+        "3": 8,
+        "4": 3
+      }
+    },
+    "docstring_info": {
+      "count": 12,
+      "total_tokens": 109
+    },
+    "top_identifiers": [
+      [
+        "args",
+        {
+          "frequency": 33,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "path",
+        {
+          "frequency": 25,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "config",
+        {
+          "frequency": 17,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "help",
+        {
+          "frequency": 15,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "argparse",
+        {
+          "frequency": 9,
+          "cl100k_tokens": 2
+        }
+      ],
+      [
+        "Path",
+        {
+          "frequency": 9,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "logger",
+        {
+          "frequency": 9,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "AppConfig",
+        {
+          "frequency": 9,
+          "cl100k_tokens": 2
+        }
+      ],
+      [
+        "parts",
+        {
+          "frequency": 9,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "add_argument",
+        {
+          "frequency": 9,
+          "cl100k_tokens": 2
+        }
+      ],
+      [
+        "json",
+        {
+          "frequency": 8,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "parser",
+        {
+          "frequency": 8,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "data",
+        {
+          "frequency": 7,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "value",
+        {
+          "frequency": 7,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "load",
+        {
+          "frequency": 6,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "k",
+        {
+          "frequency": 6,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "current",
+        {
+          "frequency": 6,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "resolve_config_path",
+        {
+          "frequency": 6,
+          "cl100k_tokens": 3
+        }
+      ],
+      [
+        "Namespace",
+        {
+          "frequency": 6,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "errors",
+        {
+          "frequency": 6,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "subparsers",
+        {
+          "frequency": 6,
+          "cl100k_tokens": 2
+        }
+      ],
+      [
+        "logging",
+        {
+          "frequency": 5,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "asdict",
+        {
+          "frequency": 5,
+          "cl100k_tokens": 2
+        }
+      ],
+      [
+        "log_level",
+        {
+          "frequency": 5,
+          "cl100k_tokens": 2
+        }
+      ],
+      [
+        "key",
+        {
+          "frequency": 5,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "parsed_value",
+        {
+          "frequency": 5,
+          "cl100k_tokens": 2
+        }
+      ],
+      [
+        "output",
+        {
+          "frequency": 5,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "add_parser",
+        {
+          "frequency": 5,
+          "cl100k_tokens": 2
+        }
+      ],
+      [
+        "Any",
+        {
+          "frequency": 4,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "output_dir",
+        {
+          "frequency": 4,
+          "cl100k_tokens": 2
+        }
+      ]
+    ]
+  },
+  {
+    "file": "tests/python-real-world/class_hierarchy.py",
+    "lines": 213,
+    "non_empty_lines": 158,
+    "total_cl100k_tokens": 1530,
+    "category_breakdown": {
+      "docstring": {
+        "count": 10,
+        "cl100k_tokens": 100,
+        "examples": [
+          "\"\"\"\nOOP patterns demonstrating inheritance, abstract methods, properties,\n__slots__, dataclasses, enums, static methods, and class methods.\n\"\"\"",
+          "\"\"\"Color palette for shapes.\"\"\"",
+          "\"\"\"Abstract base class for all shapes.\"\"\"",
+          "\"\"\"Calculate the area of the shape.\"\"\"",
+          "\"\"\"Calculate the perimeter of the shape.\"\"\"",
+          "\"\"\"A circle defined by its radius.\"\"\"",
+          "\"\"\"Factory method for a unit circle.\"\"\"",
+          "\"\"\"A rectangle defined by width and height.\"\"\"",
+          "\"\"\"Factory method for a square.\"\"\"",
+          "\"\"\"A named collection of shapes with aggregate operations.\"\"\""
+        ]
+      },
+      "whitespace": {
+        "count": 209,
+        "cl100k_tokens": 8,
+        "examples": []
+      },
+      "keyword": {
+        "count": 121,
+        "cl100k_tokens": 121,
+        "examples": [
+          "from",
+          "import",
+          "class",
+          "def",
+          "return",
+          "None",
+          "if",
+          "not",
+          "raise",
+          "type"
+        ]
+      },
+      "magic_method": {
+        "count": 16,
+        "cl100k_tokens": 48,
+        "examples": [
+          "__future__",
+          "__slots__",
+          "__init__",
+          "__name__",
+          "__repr__",
+          "__iter__",
+          "__len__"
+        ]
+      },
+      "identifier": {
+        "count": 295,
+        "cl100k_tokens": 351,
+        "examples": [
+          "annotations",
+          "math",
+          "abc",
+          "ABC",
+          "dataclasses",
+          "dataclass",
+          "field",
+          "enum",
+          "Enum",
+          "auto"
+        ]
+      },
+      "delimiter": {
+        "count": 511,
+        "cl100k_tokens": 511,
+        "examples": [
+          ",",
+          "(",
+          ")",
+          ":",
+          "{",
+          ".",
+          "}",
+          "[",
+          "]",
+          "..."
+        ]
+      },
+      "builtin": {
+        "count": 71,
+        "cl100k_tokens": 74,
+        "examples": [
+          "abstractmethod",
+          "str",
+          "int",
+          "property",
+          "isinstance",
+          "id",
+          "float",
+          "classmethod",
+          "staticmethod",
+          "bool"
+        ]
+      },
+      "indentation": {
+        "count": 90,
+        "cl100k_tokens": 8,
+        "examples": [
+          "    ",
+          "        ",
+          ""
+        ]
+      },
+      "operator": {
+        "count": 105,
+        "cl100k_tokens": 105,
+        "examples": [
+          "=",
+          "->",
+          "+=",
+          "@",
+          "%",
+          ">",
+          "!",
+          "*",
+          "**",
+          "+"
+        ]
+      },
+      "self": {
+        "count": 74,
+        "cl100k_tokens": 74,
+        "examples": [
+          "self"
+        ]
+      },
+      "string_literal": {
+        "count": 21,
+        "cl100k_tokens": 76,
+        "examples": [
+          "\"#FF0000\"",
+          "\"#00FF00\"",
+          "\"#0000FF\"",
+          "\"#FFFF00\"",
+          "\"#000000\"",
+          "\"#FFFFFF\"",
+          "\"_color\"",
+          "\"_label\"",
+          "\"\"",
+          "\"_radius\""
+        ]
+      },
+      "number_literal": {
+        "count": 13,
+        "cl100k_tokens": 26,
+        "examples": [
+          "0",
+          "1",
+          "10000",
+          "2",
+          "1.0",
+          "5.0",
+          "3.0",
+          "4.0",
+          "2.5",
+          "2.0"
+        ]
+      },
+      "other": {
+        "count": 51,
+        "cl100k_tokens": 115,
+        "examples": [
+          "f\"",
+          "Expected Color, got ",
+          "\"",
+          "_",
+          "(color=",
+          ", label=",
+          ")",
+          "Invalid radius: ",
+          "Invalid dimensions: ",
+          "x"
+        ]
+      },
+      "cls": {
+        "count": 6,
+        "cl100k_tokens": 6,
+        "examples": [
+          "cls"
+        ]
+      },
+      "comment": {
+        "count": 1,
+        "cl100k_tokens": 7,
+        "examples": [
+          "# type: ignore[arg-type]"
+        ]
+      }
+    },
+    "summary": {
+      "total_tokens": 1530,
+      "keyword_tokens": 121,
+      "keyword_pct": "7.9",
+      "identifier_tokens": 351,
+      "identifier_pct": "22.9",
+      "self_tokens": 74,
+      "self_pct": "4.8",
+      "docstring_tokens": 100,
+      "docstring_pct": "6.5",
+      "import_tokens": 38,
+      "import_pct": "2.5",
+      "decorator_tokens": 43,
+      "decorator_pct": "2.8",
+      "type_hint_tokens": 126,
+      "type_hint_pct": "8.2"
+    },
+    "keyword_frequency": {
+      "from": 5,
+      "import": 6,
+      "class": 5,
+      "def": 33,
+      "return": 27,
+      "None": 7,
+      "if": 8,
+      "not": 5,
+      "raise": 3,
+      "type": 4,
+      "or": 1,
+      "and": 2,
+      "for": 5,
+      "in": 5,
+      "lambda": 2,
+      "False": 1,
+      "is": 1,
+      "True": 1
+    },
+    "self_info": {
+      "self_param": 29,
+      "self_attr": 40,
+      "self_method": 6,
+      "total_self": 75
+    },
+    "structure_info": {
+      "structures": {
+        "from_import": 5,
+        "import": 1,
+        "class": 5,
+        "inheritance": 4,
+        "class_decorator": 1,
+        "if": 6,
+        "def": 33,
+        "return_annotation": 33,
+        "param_annotation": 16,
+        "decorator": 13,
+        "kwargs": 1,
+        "for": 1,
+        "return": 27,
+        "self_attr": 40,
+        "raise": 3,
+        "fstring": 17,
+        "list_comp": 2,
+        "generator_exp": 2,
+        "walrus": 1,
+        "lambda": 2
+      },
+      "imports": [
+        "from __future__",
+        "math",
+        "from abc",
+        "from dataclasses",
+        "from enum",
+        "from typing"
+      ],
+      "decorator_count": 13,
+      "type_hint_count": 49
+    },
+    "indent_info": {
+      "total_indent_spaces": 889,
+      "indented_lines": 141,
+      "total_lines": 158,
+      "max_indent_level": 4,
+      "indent_distribution": {
+        "1": 75,
+        "2": 52,
+        "3": 13,
+        "4": 1
+      }
+    },
+    "docstring_info": {
+      "count": 10,
+      "total_tokens": 100
+    },
+    "top_identifiers": [
+      [
+        "Color",
+        {
+          "frequency": 21,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "color",
+        {
+          "frequency": 16,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "s",
+        {
+          "frequency": 14,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "Shape",
+        {
+          "frequency": 12,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "label",
+        {
+          "frequency": 11,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "shapes",
+        {
+          "frequency": 11,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "collection",
+        {
+          "frequency": 10,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "area",
+        {
+          "frequency": 8,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "value",
+        {
+          "frequency": 7,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "auto",
+        {
+          "frequency": 6,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "Circle",
+        {
+          "frequency": 6,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "radius",
+        {
+          "frequency": 6,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "_width",
+        {
+          "frequency": 6,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "_height",
+        {
+          "frequency": 6,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "add",
+        {
+          "frequency": 6,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "math",
+        {
+          "frequency": 5,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "RED",
+        {
+          "frequency": 5,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "width",
+        {
+          "frequency": 5,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "height",
+        {
+          "frequency": 5,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "shape",
+        {
+          "frequency": 5,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "BLUE",
+        {
+          "frequency": 4,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "_color",
+        {
+          "frequency": 4,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "perimeter",
+        {
+          "frequency": 4,
+          "cl100k_tokens": 2
+        }
+      ],
+      [
+        "is_valid_dimension",
+        {
+          "frequency": 4,
+          "cl100k_tokens": 3
+        }
+      ],
+      [
+        "name",
+        {
+          "frequency": 4,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "_radius",
+        {
+          "frequency": 4,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "Rectangle",
+        {
+          "frequency": 4,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "reverse",
+        {
+          "frequency": 4,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "GREEN",
+        {
+          "frequency": 3,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "YELLOW",
+        {
+          "frequency": 3,
+          "cl100k_tokens": 1
+        }
+      ]
+    ]
+  },
+  {
+    "file": "tests/python-real-world/async_fetcher.py",
+    "lines": 189,
+    "non_empty_lines": 154,
+    "total_cl100k_tokens": 1378,
+    "category_breakdown": {
+      "docstring": {
+        "count": 8,
+        "cl100k_tokens": 115,
+        "examples": [
+          "\"\"\"\nAsync HTTP fetcher pattern using asyncio. Simulates HTTP requests with\nasync context managers, async generators, semaphore-based concurrency\nlimiting, retry logic, and structured result handling.\n\"\"\"",
+          "\"\"\"Result of a single fetch operation.\"\"\"",
+          "\"\"\"Aggregate statistics for a batch of fetch operations.\"\"\"",
+          "\"\"\"Async context manager simulating an HTTP connection pool.\"\"\"",
+          "\"\"\"Simulate an HTTP GET request with random latency and occasional failures.\"\"\"",
+          "\"\"\"Fetch a single URL with retry logic and concurrency limiting.\"\"\"",
+          "\"\"\"Fetch multiple URLs concurrently and yield results as they complete.\"\"\"",
+          "\"\"\"Run the full fetch pipeline and print results.\"\"\""
+        ]
+      },
+      "whitespace": {
+        "count": 184,
+        "cl100k_tokens": 7,
+        "examples": []
+      },
+      "keyword": {
+        "count": 106,
+        "cl100k_tokens": 106,
+        "examples": [
+          "from",
+          "import",
+          "class",
+          "True",
+          "def",
+          "return",
+          "if",
+          "is",
+          "None",
+          "raise"
+        ]
+      },
+      "magic_method": {
+        "count": 5,
+        "cl100k_tokens": 17,
+        "examples": [
+          "__future__",
+          "__init__",
+          "__aenter__",
+          "__aexit__",
+          "__name__"
+        ]
+      },
+      "identifier": {
+        "count": 266,
+        "cl100k_tokens": 402,
+        "examples": [
+          "annotations",
+          "asyncio",
+          "json",
+          "random",
+          "time",
+          "dataclasses",
+          "dataclass",
+          "field",
+          "enum",
+          "Enum"
+        ]
+      },
+      "delimiter": {
+        "count": 346,
+        "cl100k_tokens": 346,
+        "examples": [
+          ",",
+          "(",
+          ")",
+          ":",
+          "[",
+          "]",
+          ".",
+          "{",
+          "}"
+        ]
+      },
+      "indentation": {
+        "count": 68,
+        "cl100k_tokens": 10,
+        "examples": [
+          "    ",
+          "",
+          "    "
+        ]
+      },
+      "operator": {
+        "count": 93,
+        "cl100k_tokens": 93,
+        "examples": [
+          "=",
+          "@",
+          "->",
+          "<=",
+          "<",
+          "/",
+          ">",
+          "+=",
+          "+",
+          "-"
+        ]
+      },
+      "builtin": {
+        "count": 38,
+        "cl100k_tokens": 38,
+        "examples": [
+          "str",
+          "int",
+          "float",
+          "property",
+          "bool",
+          "tuple",
+          "range",
+          "round",
+          "list",
+          "print"
+        ]
+      },
+      "number_literal": {
+        "count": 42,
+        "cl100k_tokens": 62,
+        "examples": [
+          "1",
+          "200",
+          "300",
+          "0",
+          "0.0",
+          "0.05",
+          "0.01",
+          "0.1",
+          "0.15",
+          "500"
+        ]
+      },
+      "self": {
+        "count": 32,
+        "cl100k_tokens": 32,
+        "examples": [
+          "self"
+        ]
+      },
+      "string_literal": {
+        "count": 12,
+        "cl100k_tokens": 41,
+        "examples": [
+          "\"Response body is empty\"",
+          "\"Connection is not open\"",
+          "\"error\"",
+          "\"Internal server error\"",
+          "\"url\"",
+          "\"data\"",
+          "'/'",
+          "\"timestamp\"",
+          "\"OK\"",
+          "\"FAIL\""
+        ]
+      },
+      "other": {
+        "count": 44,
+        "cl100k_tokens": 92,
+        "examples": [
+          "f\"",
+          "Fetched ",
+          " URLs: ",
+          " ok, ",
+          " failed, ",
+          "\"",
+          " retried | avg ",
+          ".1f",
+          "ms",
+          "Request to "
+        ]
+      },
+      "comment": {
+        "count": 3,
+        "cl100k_tokens": 13,
+        "examples": [
+          "# Simulate connection setup",
+          "# Simulate occasional failures",
+          "# Backoff"
+        ]
+      }
+    },
+    "summary": {
+      "total_tokens": 1378,
+      "keyword_tokens": 106,
+      "keyword_pct": "7.7",
+      "identifier_tokens": 402,
+      "identifier_pct": "29.2",
+      "self_tokens": 32,
+      "self_pct": "2.3",
+      "docstring_tokens": 115,
+      "docstring_pct": "8.3",
+      "import_tokens": 37,
+      "import_pct": "2.7",
+      "decorator_tokens": 16,
+      "decorator_pct": "1.2",
+      "type_hint_tokens": 112,
+      "type_hint_pct": "8.1"
+    },
+    "keyword_frequency": {
+      "from": 4,
+      "import": 8,
+      "class": 4,
+      "True": 2,
+      "def": 13,
+      "return": 10,
+      "if": 13,
+      "is": 1,
+      "None": 7,
+      "raise": 3,
+      "else": 5,
+      "False": 2,
+      "async": 10,
+      "await": 6,
+      "not": 1,
+      "with": 2,
+      "for": 5,
+      "in": 5,
+      "try": 1,
+      "except": 1,
+      "as": 2,
+      "yield": 1
+    },
+    "self_info": {
+      "self_param": 9,
+      "self_attr": 22,
+      "self_method": 0,
+      "total_self": 31
+    },
+    "structure_info": {
+      "structures": {
+        "from_import": 4,
+        "import": 4,
+        "class": 4,
+        "inheritance": 1,
+        "class_decorator": 2,
+        "async_def": 7,
+        "if": 9,
+        "def": 6,
+        "decorator": 2,
+        "return_annotation": 6,
+        "param_annotation": 2,
+        "async_with": 2,
+        "return": 10,
+        "for": 2,
+        "list_comp": 2,
+        "await": 6,
+        "raise": 3,
+        "self_attr": 22,
+        "fstring": 10,
+        "try": 1,
+        "except": 1,
+        "yield": 1
+      },
+      "imports": [
+        "from __future__",
+        "asyncio",
+        "json",
+        "random",
+        "time",
+        "from dataclasses",
+        "from enum",
+        "from typing"
+      ],
+      "decorator_count": 2,
+      "type_hint_count": 8
+    },
+    "indent_info": {
+      "total_indent_spaces": 1118,
+      "indented_lines": 129,
+      "total_lines": 154,
+      "max_indent_level": 5,
+      "indent_distribution": {
+        "1": 47,
+        "2": 39,
+        "3": 26,
+        "4": 9,
+        "5": 8
+      }
+    },
+    "docstring_info": {
+      "count": 8,
+      "total_tokens": 115
+    },
+    "top_identifiers": [
+      [
+        "url",
+        {
+          "frequency": 14,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "result",
+        {
+          "frequency": 14,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "attempt",
+        {
+          "frequency": 11,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "asyncio",
+        {
+          "frequency": 9,
+          "cl100k_tokens": 2
+        }
+      ],
+      [
+        "body",
+        {
+          "frequency": 9,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "status_code",
+        {
+          "frequency": 8,
+          "cl100k_tokens": 2
+        }
+      ],
+      [
+        "urls",
+        {
+          "frequency": 7,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "time",
+        {
+          "frequency": 6,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "FetchStatus",
+        {
+          "frequency": 6,
+          "cl100k_tokens": 2
+        }
+      ],
+      [
+        "FetchResult",
+        {
+          "frequency": 6,
+          "cl100k_tokens": 2
+        }
+      ],
+      [
+        "fetch_status",
+        {
+          "frequency": 6,
+          "cl100k_tokens": 2
+        }
+      ],
+      [
+        "concurrency",
+        {
+          "frequency": 6,
+          "cl100k_tokens": 2
+        }
+      ],
+      [
+        "json",
+        {
+          "frequency": 5,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "auto",
+        {
+          "frequency": 5,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "Any",
+        {
+          "frequency": 5,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "elapsed_ms",
+        {
+          "frequency": 5,
+          "cl100k_tokens": 2
+        }
+      ],
+      [
+        "total",
+        {
+          "frequency": 5,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "random",
+        {
+          "frequency": 4,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "SimulatedConnection",
+        {
+          "frequency": 4,
+          "cl100k_tokens": 3
+        }
+      ],
+      [
+        "_open",
+        {
+          "frequency": 4,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "conn",
+        {
+          "frequency": 4,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "semaphore",
+        {
+          "frequency": 4,
+          "cl100k_tokens": 2
+        }
+      ],
+      [
+        "max_retries",
+        {
+          "frequency": 4,
+          "cl100k_tokens": 3
+        }
+      ],
+      [
+        "elapsed",
+        {
+          "frequency": 4,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "stats",
+        {
+          "frequency": 4,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "dataclass",
+        {
+          "frequency": 3,
+          "cl100k_tokens": 2
+        }
+      ],
+      [
+        "Optional",
+        {
+          "frequency": 3,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "ok",
+        {
+          "frequency": 3,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "FetchStats",
+        {
+          "frequency": 3,
+          "cl100k_tokens": 2
+        }
+      ],
+      [
+        "succeeded",
+        {
+          "frequency": 3,
+          "cl100k_tokens": 2
+        }
+      ]
+    ]
+  },
+  {
+    "file": "tests/python-real-world/orm_models.py",
+    "lines": 526,
+    "non_empty_lines": 410,
+    "total_cl100k_tokens": 3789,
+    "category_breakdown": {
+      "docstring": {
+        "count": 14,
+        "cl100k_tokens": 191,
+        "examples": [
+          "\"\"\"\nMini ORM-like system with model definitions, field validation,\nrelationship mapping, and a fluent query builder.\n\nSupports model registration via metaclass, typed fields with validators,\none-to-many / many-to-many relationships, and an in-memory storage backend.\n\"\"\"",
+          "\"\"\"Base exception for every ORM-related error.\"\"\"",
+          "\"\"\"Raised when a field value fails validation.\"\"\"",
+          "\"\"\"Raised when a required field is left empty.\"\"\"",
+          "\"\"\"Raised when a query expects exactly one record but finds none.\"\"\"",
+          "\"\"\"Raised when two models share the same table name.\"\"\"",
+          "\"\"\"Raised on transaction commit / rollback failures.\"\"\"",
+          "\"\"\"Metadata and validation logic for a single model field.\"\"\"",
+          "\"\"\"Describes a lazy-loaded one-to-many or many-to-many link.\"\"\"",
+          "\"\"\"Central catalogue of all registered model classes.\"\"\""
+        ]
+      },
+      "whitespace": {
+        "count": 519,
+        "cl100k_tokens": 17,
+        "examples": []
+      },
+      "keyword": {
+        "count": 334,
+        "cl100k_tokens": 334,
+        "examples": [
+          "from",
+          "import",
+          "class",
+          "def",
+          "None",
+          "True",
+          "False",
+          "type",
+          "if",
+          "is"
+        ]
+      },
+      "magic_method": {
+        "count": 36,
+        "cl100k_tokens": 119,
+        "examples": [
+          "__future__",
+          "__init__",
+          "__set_name__",
+          "__get__",
+          "__set__",
+          "__name__",
+          "__table_name__",
+          "__new__",
+          "__repr__",
+          "__str__"
+        ]
+      },
+      "identifier": {
+        "count": 801,
+        "cl100k_tokens": 1025,
+        "examples": [
+          "annotations",
+          "re",
+          "uuid",
+          "contextlib",
+          "contextmanager",
+          "dataclasses",
+          "dataclass",
+          "field",
+          "datetime",
+          "timezone"
+        ]
+      },
+      "delimiter": {
+        "count": 1281,
+        "cl100k_tokens": 1281,
+        "examples": [
+          ",",
+          "(",
+          ")",
+          ":",
+          ".",
+          "{",
+          "}",
+          "[",
+          "]",
+          "..."
+        ]
+      },
+      "comment": {
+        "count": 30,
+        "cl100k_tokens": 130,
+        "examples": [
+          "# ---------------------------------------------------------------------------",
+          "# Exception hierarchy",
+          "# Field descriptors",
+          "# --- descriptor protocol ---",
+          "# --- validation ---",
+          "# Registry + metaclass",
+          "# type: ignore[attr-defined]",
+          "# type: ignore[arg-type]",
+          "# type: ignore[return-value]",
+          "# In-memory storage (acts as a tiny database backend)"
+        ]
+      },
+      "indentation": {
+        "count": 218,
+        "cl100k_tokens": 20,
+        "examples": [
+          "    ",
+          "",
+          "    "
+        ]
+      },
+      "self": {
+        "count": 140,
+        "cl100k_tokens": 140,
+        "examples": [
+          "self"
+        ]
+      },
+      "builtin": {
+        "count": 143,
+        "cl100k_tokens": 147,
+        "examples": [
+          "str",
+          "super",
+          "bool",
+          "int",
+          "float",
+          "list",
+          "getattr",
+          "setattr",
+          "isinstance",
+          "len"
+        ]
+      },
+      "operator": {
+        "count": 244,
+        "cl100k_tokens": 244,
+        "examples": [
+          "->",
+          "=",
+          "@",
+          "==",
+          ">",
+          "<",
+          "*",
+          "**",
+          "!=",
+          "+"
+        ]
+      },
+      "other": {
+        "count": 70,
+        "cl100k_tokens": 128,
+        "examples": [
+          "f\"",
+          "Validation failed on '",
+          "': ",
+          "\"",
+          "_field_",
+          "Expected str, got ",
+          "Exceeds max length ",
+          "Does not match pattern ",
+          "Below minimum ",
+          "Above maximum "
+        ]
+      },
+      "string_literal": {
+        "count": 37,
+        "cl100k_tokens": 138,
+        "examples": [
+          "\"This field is required\"",
+          "\"T\"",
+          "\"M\"",
+          "\"Model\"",
+          "\"\"",
+          "\"__table_name__\"",
+          "\"s\"",
+          "\"Transaction rolled back\"",
+          "\"id\"",
+          "\"desc\""
+        ]
+      },
+      "cls": {
+        "count": 50,
+        "cl100k_tokens": 50,
+        "examples": [
+          "cls"
+        ]
+      },
+      "number_literal": {
+        "count": 16,
+        "cl100k_tokens": 16,
+        "examples": [
+          "0",
+          "1",
+          "50",
+          "64",
+          "255",
+          "200"
+        ]
+      }
+    },
+    "summary": {
+      "total_tokens": 3789,
+      "keyword_tokens": 334,
+      "keyword_pct": "8.8",
+      "identifier_tokens": 1025,
+      "identifier_pct": "27.1",
+      "self_tokens": 140,
+      "self_pct": "3.7",
+      "docstring_tokens": 191,
+      "docstring_pct": "5.0",
+      "import_tokens": 40,
+      "import_pct": "1.1",
+      "decorator_tokens": 70,
+      "decorator_pct": "1.8",
+      "type_hint_tokens": 538,
+      "type_hint_pct": "14.2"
+    },
+    "keyword_frequency": {
+      "from": 8,
+      "import": 8,
+      "class": 17,
+      "def": 54,
+      "None": 43,
+      "True": 7,
+      "False": 12,
+      "type": 12,
+      "if": 31,
+      "is": 11,
+      "return": 39,
+      "and": 9,
+      "raise": 11,
+      "not": 14,
+      "match": 2,
+      "in": 24,
+      "for": 17,
+      "or": 2,
+      "yield": 3,
+      "try": 1,
+      "except": 1,
+      "as": 1,
+      "else": 3,
+      "lambda": 4
+    },
+    "self_info": {
+      "self_param": 34,
+      "self_attr": 92,
+      "self_method": 10,
+      "total_self": 136
+    },
+    "structure_info": {
+      "structures": {
+        "from_import": 6,
+        "import": 2,
+        "class": 17,
+        "inheritance": 13,
+        "class_decorator": 1,
+        "def": 54,
+        "return_annotation": 54,
+        "param_annotation": 37,
+        "decorator": 22,
+        "kwargs": 4,
+        "return": 39,
+        "if": 26,
+        "for": 9,
+        "raise": 11,
+        "try": 1,
+        "self_attr": 92,
+        "fstring": 19,
+        "yield_from": 1,
+        "list_comp": 3,
+        "dict_comp": 2,
+        "except": 1,
+        "set_comp": 1,
+        "yield": 2,
+        "lambda": 4,
+        "generator_exp": 2
+      },
+      "imports": [
+        "from __future__",
+        "re",
+        "uuid",
+        "from contextlib",
+        "from dataclasses",
+        "from datetime",
+        "from enum",
+        "from typing"
+      ],
+      "decorator_count": 22,
+      "type_hint_count": 91
+    },
+    "indent_info": {
+      "total_indent_spaces": 2436,
+      "indented_lines": 353,
+      "total_lines": 410,
+      "max_indent_level": 5,
+      "indent_distribution": {
+        "1": 159,
+        "2": 145,
+        "3": 37,
+        "4": 11,
+        "5": 1
+      }
+    },
+    "docstring_info": {
+      "count": 14,
+      "total_tokens": 191
+    },
+    "top_identifiers": [
+      [
+        "Any",
+        {
+          "frequency": 25,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "FieldDescriptor",
+        {
+          "frequency": 24,
+          "cl100k_tokens": 2
+        }
+      ],
+      [
+        "Dict",
+        {
+          "frequency": 21,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "table",
+        {
+          "frequency": 21,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "M",
+        {
+          "frequency": 20,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "name",
+        {
+          "frequency": 20,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "rows",
+        {
+          "frequency": 20,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "r",
+        {
+          "frequency": 18,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "FieldType",
+        {
+          "frequency": 17,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "field_type",
+        {
+          "frequency": 14,
+          "cl100k_tokens": 2
+        }
+      ],
+      [
+        "value",
+        {
+          "frequency": 14,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "List",
+        {
+          "frequency": 12,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "Optional",
+        {
+          "frequency": 12,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "Type",
+        {
+          "frequency": 11,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "Model",
+        {
+          "frequency": 10,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "STRING",
+        {
+          "frequency": 9,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "kwargs",
+        {
+          "frequency": 9,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "_tables",
+        {
+          "frequency": 9,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "QueryBuilder",
+        {
+          "frequency": 9,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "ValidationError",
+        {
+          "frequency": 8,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "required",
+        {
+          "frequency": 8,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "max_length",
+        {
+          "frequency": 8,
+          "cl100k_tokens": 2
+        }
+      ],
+      [
+        "model_cls",
+        {
+          "frequency": 8,
+          "cl100k_tokens": 2
+        }
+      ],
+      [
+        "items",
+        {
+          "frequency": 8,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "_model",
+        {
+          "frequency": 8,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "k",
+        {
+          "frequency": 8,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "auto",
+        {
+          "frequency": 7,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "default",
+        {
+          "frequency": 7,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "append",
+        {
+          "frequency": 7,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "key",
+        {
+          "frequency": 7,
+          "cl100k_tokens": 1
+        }
+      ]
+    ]
+  },
+  {
+    "file": "tests/python-real-world/task_scheduler.py",
+    "lines": 604,
+    "non_empty_lines": 480,
+    "total_cl100k_tokens": 4091,
+    "category_breakdown": {
+      "docstring": {
+        "count": 20,
+        "cl100k_tokens": 259,
+        "examples": [
+          "\"\"\"\nAsync task scheduler with priority queuing, periodic and one-shot tasks,\ndecorator-based task registration, and structured logging.\n\nRequires Python 3.10+ (match/case, type union syntax, walrus operator).\n\"\"\"",
+          "\"\"\"Any object that exposes an async run interface.\"\"\"",
+          "\"\"\"Anything that can be cancelled.\"\"\"",
+          "\"\"\"Use match/case to return a human-readable description.\"\"\"",
+          "\"\"\"Root exception for the scheduler subsystem.\"\"\"",
+          "\"\"\"Raised when a task id is not in the registry.\"\"\"",
+          "\"\"\"Raised when attempting to start an already-running task.\"\"\"",
+          "\"\"\"Raised when a task exhausts its retry budget.\"\"\"",
+          "\"\"\"Simple publish-subscribe for scheduler lifecycle events.\"\"\"",
+          "\"\"\"Abstract base for every schedulable unit of work.\"\"\""
+        ]
+      },
+      "whitespace": {
+        "count": 598,
+        "cl100k_tokens": 20,
+        "examples": []
+      },
+      "keyword": {
+        "count": 321,
+        "cl100k_tokens": 321,
+        "examples": [
+          "from",
+          "import",
+          "None",
+          "class",
+          "async",
+          "def",
+          "match",
+          "case",
+          "return",
+          "for"
+        ]
+      },
+      "magic_method": {
+        "count": 19,
+        "cl100k_tokens": 58,
+        "examples": [
+          "__future__",
+          "__init__",
+          "__post_init__",
+          "__lt__",
+          "__eq__",
+          "__hash__",
+          "__repr__",
+          "__name__",
+          "__bool__"
+        ]
+      },
+      "identifier": {
+        "count": 913,
+        "cl100k_tokens": 1310,
+        "examples": [
+          "annotations",
+          "asyncio",
+          "heapq",
+          "logging",
+          "uuid",
+          "abc",
+          "ABC",
+          "contextlib",
+          "asynccontextmanager",
+          "dataclasses"
+        ]
+      },
+      "delimiter": {
+        "count": 1267,
+        "cl100k_tokens": 1267,
+        "examples": [
+          ",",
+          "(",
+          ")",
+          ".",
+          ":",
+          "[",
+          "]",
+          "...",
+          "{",
+          "}"
+        ]
+      },
+      "builtin": {
+        "count": 69,
+        "cl100k_tokens": 72,
+        "examples": [
+          "abstractmethod",
+          "str",
+          "int",
+          "float",
+          "dict",
+          "bool",
+          "isinstance",
+          "hash",
+          "property",
+          "staticmethod"
+        ]
+      },
+      "comment": {
+        "count": 42,
+        "cl100k_tokens": 178,
+        "examples": [
+          "# ---------------------------------------------------------------------------",
+          "# Logging setup",
+          "# Type aliases & protocols",
+          "# Task state machine",
+          "# Custom exceptions",
+          "# Event / hook system",
+          "# Task hierarchy (abstract base -> concrete variants)",
+          "# comparison helpers for heapq (lower number = higher priority)",
+          "# --- lifecycle ---",
+          "# type: ignore[assignment]"
+        ]
+      },
+      "operator": {
+        "count": 231,
+        "cl100k_tokens": 231,
+        "examples": [
+          "=",
+          "@",
+          "->",
+          "*",
+          "**",
+          "<",
+          "==",
+          "!",
+          "|",
+          "-"
+        ]
+      },
+      "string_literal": {
+        "count": 39,
+        "cl100k_tokens": 195,
+        "examples": [
+          "\"task_scheduler\"",
+          "\"[%(asctime)s] %(levelname)-8s %(name)s: %(message)s\"",
+          "\"T\"",
+          "\"R\"",
+          "\"Task is waiting to be queued\"",
+          "\"Task is in the priority queue\"",
+          "\"Task is currently executing\"",
+          "\"Task finished successfully\"",
+          "\"Task encountered an error\"",
+          "\"Task was cancelled before completion\""
+        ]
+      },
+      "indentation": {
+        "count": 248,
+        "cl100k_tokens": 25,
+        "examples": [
+          "    ",
+          "",
+          "    "
+        ]
+      },
+      "self": {
+        "count": 136,
+        "cl100k_tokens": 136,
+        "examples": [
+          "self"
+        ]
+      },
+      "other": {
+        "count": 99,
+        "cl100k_tokens": 195,
+        "examples": [
+          "f\"",
+          "Listener error on event '",
+          "'",
+          "\"",
+          "(id=",
+          ", name=",
+          ", ",
+          "state=",
+          ", pri=",
+          ")"
+        ]
+      },
+      "number_literal": {
+        "count": 18,
+        "cl100k_tokens": 24,
+        "examples": [
+          "5",
+          "3",
+          "0",
+          "60.0",
+          "4",
+          "300.0",
+          "1",
+          "0.01",
+          "200",
+          "2"
+        ]
+      }
+    },
+    "summary": {
+      "total_tokens": 4091,
+      "keyword_tokens": 321,
+      "keyword_pct": "7.8",
+      "identifier_tokens": 1310,
+      "identifier_pct": "32.0",
+      "self_tokens": 136,
+      "self_pct": "3.3",
+      "docstring_tokens": 259,
+      "docstring_pct": "6.3",
+      "import_tokens": 58,
+      "import_pct": "1.4",
+      "decorator_tokens": 80,
+      "decorator_pct": "2.0",
+      "type_hint_tokens": 452,
+      "type_hint_pct": "11.0"
+    },
+    "keyword_frequency": {
+      "from": 10,
+      "import": 12,
+      "None": 42,
+      "class": 15,
+      "async": 18,
+      "def": 57,
+      "match": 2,
+      "case": 13,
+      "return": 44,
+      "for": 11,
+      "in": 13,
+      "try": 6,
+      "await": 18,
+      "except": 5,
+      "False": 2,
+      "lambda": 2,
+      "if": 12,
+      "not": 8,
+      "type": 1,
+      "raise": 8,
+      "pass": 1,
+      "and": 2,
+      "is": 3,
+      "or": 1,
+      "yield": 5,
+      "as": 2,
+      "while": 3,
+      "with": 1,
+      "finally": 3,
+      "True": 1
+    },
+    "self_info": {
+      "self_param": 45,
+      "self_attr": 87,
+      "self_method": 11,
+      "total_self": 143
+    },
+    "structure_info": {
+      "structures": {
+        "from_import": 8,
+        "import": 4,
+        "class": 15,
+        "inheritance": 12,
+        "class_decorator": 5,
+        "def": 40,
+        "return_annotation": 40,
+        "param_annotation": 17,
+        "async_def": 17,
+        "decorator": 14,
+        "match": 2,
+        "args": 2,
+        "kwargs": 1,
+        "return": 44,
+        "for": 9,
+        "if": 12,
+        "raise": 8,
+        "while": 3,
+        "async_with": 1,
+        "try": 6,
+        "await": 18,
+        "list_comp": 2,
+        "self_attr": 87,
+        "fstring": 21,
+        "yield_from": 1,
+        "walrus": 2,
+        "except": 5,
+        "lambda": 2,
+        "yield": 4
+      },
+      "imports": [
+        "from __future__",
+        "asyncio",
+        "heapq",
+        "logging",
+        "uuid",
+        "from abc",
+        "from contextlib",
+        "from dataclasses",
+        "from datetime",
+        "from enum",
+        "from functools",
+        "from typing"
+      ],
+      "decorator_count": 6,
+      "type_hint_count": 57
+    },
+    "indent_info": {
+      "total_indent_spaces": 3044,
+      "indented_lines": 381,
+      "total_lines": 480,
+      "max_indent_level": 6,
+      "indent_distribution": {
+        "1": 161,
+        "2": 113,
+        "3": 64,
+        "4": 35,
+        "5": 6,
+        "6": 2
+      }
+    },
+    "docstring_info": {
+      "count": 20,
+      "total_tokens": 259
+    },
+    "top_identifiers": [
+      [
+        "task",
+        {
+          "frequency": 51,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "TaskState",
+        {
+          "frequency": 33,
+          "cl100k_tokens": 2
+        }
+      ],
+      [
+        "TaskBase",
+        {
+          "frequency": 22,
+          "cl100k_tokens": 2
+        }
+      ],
+      [
+        "name",
+        {
+          "frequency": 18,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "logger",
+        {
+          "frequency": 17,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "Any",
+        {
+          "frequency": 16,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "TaskResult",
+        {
+          "frequency": 16,
+          "cl100k_tokens": 2
+        }
+      ],
+      [
+        "task_id",
+        {
+          "frequency": 16,
+          "cl100k_tokens": 2
+        }
+      ],
+      [
+        "asyncio",
+        {
+          "frequency": 13,
+          "cl100k_tokens": 2
+        }
+      ],
+      [
+        "r",
+        {
+          "frequency": 13,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "func",
+        {
+          "frequency": 13,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "TaskCallback",
+        {
+          "frequency": 12,
+          "cl100k_tokens": 2
+        }
+      ],
+      [
+        "priority",
+        {
+          "frequency": 12,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "callback",
+        {
+          "frequency": 11,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "args",
+        {
+          "frequency": 11,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "kwargs",
+        {
+          "frequency": 11,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "transition",
+        {
+          "frequency": 11,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "t",
+        {
+          "frequency": 11,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "state",
+        {
+          "frequency": 10,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "cb",
+        {
+          "frequency": 10,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "max_retries",
+        {
+          "frequency": 10,
+          "cl100k_tokens": 3
+        }
+      ],
+      [
+        "List",
+        {
+          "frequency": 9,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "TaskId",
+        {
+          "frequency": 9,
+          "cl100k_tokens": 2
+        }
+      ],
+      [
+        "field",
+        {
+          "frequency": 8,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "auto",
+        {
+          "frequency": 8,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "Callable",
+        {
+          "frequency": 8,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "Dict",
+        {
+          "frequency": 8,
+          "cl100k_tokens": 1
+        }
+      ],
+      [
+        "COMPLETED",
+        {
+          "frequency": 8,
+          "cl100k_tokens": 2
+        }
+      ],
+      [
+        "SchedulerError",
+        {
+          "frequency": 8,
+          "cl100k_tokens": 2
+        }
+      ],
+      [
+        "child",
+        {
+          "frequency": 8,
+          "cl100k_tokens": 1
+        }
+      ]
+    ]
+  }
+]

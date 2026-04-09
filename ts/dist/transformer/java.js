@@ -227,8 +227,9 @@ function transformClassDecl(name, modifiers, typeParams, node) {
     const cb = child(node, "classBody");
     const body = cb ? transformClassBody(cb) : { fields: [], methods: [], constructors: [], innerClasses: [] };
     // Infer type parameters from field/method types if not explicitly declared
+    // Skip inference for anonymous inner classes (__Anon_*) — they inherit type params from enclosing class
     let effectiveTypeParams = typeParams;
-    if (effectiveTypeParams.length === 0) {
+    if (effectiveTypeParams.length === 0 && !name.startsWith("__Anon_")) {
         effectiveTypeParams = inferClassTypeParams(body);
     }
     // Prepend type params to name if present
@@ -1286,6 +1287,34 @@ function transformPostfixExpr(node) {
     // New keyword token (for method references like ::new)
     const newTokens = tokTokens(node, "New");
     let newIdx = 0;
+    // Collect typeArgs children (for type witnesses like .<String,Integer>method())
+    const typeArgsNodes = children(node, "typeArgs");
+    // Build a set mapping selector index → typeArgs strings
+    const selectorTypeArgsMap = new Map();
+    if (typeArgsNodes.length > 0) {
+        let selTemp = 0;
+        for (const op of ops) {
+            if (op.type === "selector") {
+                // Check if any typeArgs node falls between this dot and the next ident
+                const dotOffset = op.offset;
+                const identToken = selectorIdents[selTemp];
+                if (identToken) {
+                    for (const ta of typeArgsNodes) {
+                        const taOffset = getFirstTokenOffset(ta);
+                        if (taOffset > dotOffset && taOffset < identToken.startOffset) {
+                            // This typeArgs belongs to this selector
+                            const entries = children(ta, "typeArgEntry");
+                            if (entries.length > 0) {
+                                selectorTypeArgsMap.set(selTemp, entries.map(transformTypeArgEntry));
+                            }
+                            break;
+                        }
+                    }
+                }
+                selTemp++;
+            }
+        }
+    }
     for (const op of ops) {
         switch (op.type) {
             case "call": {
@@ -1324,7 +1353,14 @@ function transformPostfixExpr(node) {
                 }
                 else if (result.kind === "SelectorExpr") {
                     // Check for generic type after identifier: e.g., ArrayList<String>()
-                    result = { kind: "CallExpr", func: result, args };
+                    const callExpr = { kind: "CallExpr", func: result, args };
+                    // Transfer type witness args from SelectorExpr to CallExpr
+                    const selTA = result.javaTypeArgs;
+                    if (selTA) {
+                        callExpr.javaTypeArgs = selTA;
+                        delete result.javaTypeArgs;
+                    }
+                    result = callExpr;
                 }
                 else {
                     result = { kind: "CallExpr", func: result, args };
@@ -1341,11 +1377,16 @@ function transformPostfixExpr(node) {
                 break;
             }
             case "selector": {
-                // Selector: '.' Ident
+                // Selector: '.' typeArgs? Ident
                 if (selectorIdx < selectorIdents.length) {
                     const sel = selectorIdents[selectorIdx].image;
-                    // Check if selector is a stdlib alias (shouldn't happen but handle it)
-                    result = { kind: "SelectorExpr", x: result, sel };
+                    const selectorExpr = { kind: "SelectorExpr", x: result, sel };
+                    // Attach type witness args if present (e.g., .<String,Integer>comparingByValue)
+                    const selTypeArgs = selectorTypeArgsMap.get(selectorIdx);
+                    if (selTypeArgs) {
+                        selectorExpr.javaTypeArgs = selTypeArgs;
+                    }
+                    result = selectorExpr;
                 }
                 selectorIdx++;
                 break;

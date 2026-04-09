@@ -1,5 +1,5 @@
 
-public class Ackermann {
+public class Ackermann.aet {
 
     public static int ackermann(int m, int n) {
         if (m == 0) {
@@ -13,8 +13,8 @@ public class Ackermann {
     }
 
     public static void main(String[] args) {
-        for (var m = 0; m <= 3; m++) {
-            for (var n = 0; n <= 4; n++) {
+        for (var m = 0; m <= 3; ++m) {
+            for (var n = 0; n <= 4; ++n) {
                 System.out.printf("A(%d,%d) = %d%n", m, n, ackermann(m, n));
             }
         }

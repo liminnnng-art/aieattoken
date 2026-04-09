@@ -3,32 +3,32 @@
     {
       "file": "ackermann.py",
       "pyTokens": 99,
-      "aetpTokens": 77,
-      "savePct": "22.2",
+      "aetpTokens": 76,
+      "savePct": "23.2",
       "parseOk": true,
       "stdoutMatch": true
     },
     {
       "file": "binsearch.py",
       "pyTokens": 170,
-      "aetpTokens": 126,
-      "savePct": "25.9",
+      "aetpTokens": 125,
+      "savePct": "26.5",
       "parseOk": true,
       "stdoutMatch": true
     },
     {
       "file": "bubblesort.py",
       "pyTokens": 116,
-      "aetpTokens": 97,
-      "savePct": "16.4",
+      "aetpTokens": 96,
+      "savePct": "17.2",
       "parseOk": true,
       "stdoutMatch": true
     },
     {
       "file": "caesar.py",
       "pyTokens": 186,
-      "aetpTokens": 166,
-      "savePct": "10.8",
+      "aetpTokens": 165,
+      "savePct": "11.3",
       "parseOk": true,
       "stdoutMatch": true
     },
@@ -69,8 +69,8 @@
     {
       "file": "gcd.py",
       "pyTokens": 45,
-      "aetpTokens": 32,
-      "savePct": "28.9",
+      "aetpTokens": 31,
+      "savePct": "31.1",
       "parseOk": true,
       "stdoutMatch": true
     },
@@ -119,16 +119,16 @@
     {
       "file": "roman.py",
       "pyTokens": 163,
-      "aetpTokens": 122,
-      "savePct": "25.2",
+      "aetpTokens": 121,
+      "savePct": "25.8",
       "parseOk": true,
       "stdoutMatch": true
     },
     {
       "file": "sieve.py",
       "pyTokens": 130,
-      "aetpTokens": 98,
-      "savePct": "24.6",
+      "aetpTokens": 97,
+      "savePct": "25.4",
       "parseOk": true,
       "stdoutMatch": false,
       "originalOut": "2 3 5 7 11 13 17 19 23 29 31 37 41 43 47 53 59 61 67 71 73 79 83 89 97\n",
@@ -155,8 +155,8 @@
     {
       "file": "balanced_brackets.py",
       "pyTokens": 101,
-      "aetpTokens": 92,
-      "savePct": "8.9",
+      "aetpTokens": 91,
+      "savePct": "9.9",
       "parseOk": true,
       "stdoutMatch": false,
       "originalOut": "''           -> True\n'[]'         -> True\n'[][]'       -> True\n'[[][]]'     -> True\n']['         -> ",
@@ -183,8 +183,8 @@
     {
       "file": "hailstone.py",
       "pyTokens": 152,
-      "aetpTokens": 143,
-      "savePct": "5.9",
+      "aetpTokens": 142,
+      "savePct": "6.6",
       "parseOk": true,
       "stdoutMatch": false,
       "originalOut": "Hailstone(27): length=112\nFirst 4: [27, 82, 41, 124]\nLast 4:  [8, 4, 2, 1]\nLongest under 100000: 770",
@@ -201,8 +201,8 @@
     {
       "file": "levenshtein.py",
       "pyTokens": 238,
-      "aetpTokens": 206,
-      "savePct": "13.4",
+      "aetpTokens": 205,
+      "savePct": "13.9",
       "parseOk": true,
       "stdoutMatch": false,
       "originalOut": "3\n3\n8\n",
@@ -219,8 +219,8 @@
     {
       "file": "nqueens.py",
       "pyTokens": 139,
-      "aetpTokens": 134,
-      "savePct": "3.6",
+      "aetpTokens": 133,
+      "savePct": "4.3",
       "parseOk": true,
       "stdoutMatch": true
     },
@@ -273,8 +273,8 @@
     {
       "file": "topological_sort.py",
       "pyTokens": 149,
-      "aetpTokens": 122,
-      "savePct": "18.1",
+      "aetpTokens": 121,
+      "savePct": "18.8",
       "parseOk": true,
       "stdoutMatch": true
     }
@@ -283,80 +283,80 @@
     {
       "file": "async_fetcher.py",
       "pyTokens": 1378,
-      "aetpTokens": 865,
-      "savePct": "37.2",
+      "aetpTokens": 863,
+      "savePct": "37.4",
       "parseOk": true,
       "roundTripOk": false
     },
     {
       "file": "calculator.py",
       "pyTokens": 674,
-      "aetpTokens": 409,
-      "savePct": "39.3",
+      "aetpTokens": 408,
+      "savePct": "39.5",
       "parseOk": true,
       "roundTripOk": false
     },
     {
       "file": "class_hierarchy.py",
       "pyTokens": 1530,
-      "aetpTokens": 934,
-      "savePct": "39.0",
+      "aetpTokens": 931,
+      "savePct": "39.2",
       "parseOk": true,
       "roundTripOk": false
     },
     {
       "file": "cli_tool.py",
       "pyTokens": 1916,
-      "aetpTokens": 1385,
-      "savePct": "27.7",
+      "aetpTokens": 1380,
+      "savePct": "28.0",
       "parseOk": true,
       "roundTripOk": true
     },
     {
       "file": "csv_reader.py",
       "pyTokens": 662,
-      "aetpTokens": 436,
-      "savePct": "34.1",
+      "aetpTokens": 435,
+      "savePct": "34.3",
       "parseOk": true,
       "roundTripOk": true
     },
     {
       "file": "data_processor.py",
       "pyTokens": 1681,
-      "aetpTokens": 1095,
-      "savePct": "34.9",
+      "aetpTokens": 1093,
+      "savePct": "35.0",
       "parseOk": true,
       "roundTripOk": true
     },
     {
       "file": "fizzbuzz.py",
       "pyTokens": 388,
-      "aetpTokens": 210,
-      "savePct": "45.9",
+      "aetpTokens": 209,
+      "savePct": "46.1",
       "parseOk": true,
       "roundTripOk": true
     },
     {
       "file": "flask_api.py",
       "pyTokens": 1257,
-      "aetpTokens": 818,
-      "savePct": "34.9",
+      "aetpTokens": 811,
+      "savePct": "35.5",
       "parseOk": true,
       "roundTripOk": true
     },
     {
       "file": "orm_models.py",
       "pyTokens": 3789,
-      "aetpTokens": 2197,
-      "savePct": "42.0",
+      "aetpTokens": 2189,
+      "savePct": "42.2",
       "parseOk": true,
       "roundTripOk": false
     },
     {
       "file": "task_scheduler.py",
       "pyTokens": 4091,
-      "aetpTokens": 2423,
-      "savePct": "40.8",
+      "aetpTokens": 2418,
+      "savePct": "40.9",
       "parseOk": true,
       "roundTripOk": false
     }
@@ -364,32 +364,32 @@
   "roundTrip": [
     {
       "file": "ackermann.py",
-      "aetp1Tokens": 77,
-      "aetp2Tokens": 77,
+      "aetp1Tokens": 76,
+      "aetp2Tokens": 76,
       "diff": 0,
       "pctDiff": "0.0",
       "status": "IDENTICAL"
     },
     {
       "file": "binsearch.py",
-      "aetp1Tokens": 126,
-      "aetp2Tokens": 126,
+      "aetp1Tokens": 125,
+      "aetp2Tokens": 125,
       "diff": 0,
       "pctDiff": "0.0",
       "status": "IDENTICAL"
     },
     {
       "file": "bubblesort.py",
-      "aetp1Tokens": 97,
-      "aetp2Tokens": 97,
+      "aetp1Tokens": 96,
+      "aetp2Tokens": 96,
       "diff": 0,
       "pctDiff": "0.0",
       "status": "IDENTICAL"
     },
     {
       "file": "caesar.py",
-      "aetp1Tokens": 166,
-      "aetp2Tokens": 166,
+      "aetp1Tokens": 165,
+      "aetp2Tokens": 165,
       "diff": 0,
       "pctDiff": "0.0",
       "status": "IDENTICAL"
@@ -428,8 +428,8 @@
     },
     {
       "file": "gcd.py",
-      "aetp1Tokens": 32,
-      "aetp2Tokens": 32,
+      "aetp1Tokens": 31,
+      "aetp2Tokens": 31,
       "diff": 0,
       "pctDiff": "0.0",
       "status": "IDENTICAL"
@@ -445,8 +445,8 @@
   ],
   "speed": {
     "totalLines": 595,
-    "totalTimeMs": "487.8",
-    "linesPerSec": "1220",
+    "totalTimeMs": "519.4",
+    "linesPerSec": "1146",
     "iterations": 10
   }
 }

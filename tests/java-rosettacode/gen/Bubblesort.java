@@ -1,13 +1,13 @@
 import java.util.Arrays;
 
-public class Bubblesort {
+public class Bubblesort.aet {
 
     public static void bubbleSort(int[] arr) {
         var n = arr.length;
-        boolean swapped;
-        for (var i = 0; i < n - 1; i++) {
+        var swapped = false;
+        for (var i = 0; i < n - 1; ++i) {
             swapped = false;
-            for (var j = 0; j < n - 1 - i; j++) {
+            for (var j = 0; j < n - 1 - i; ++j) {
                 if (arr[j] > arr[j + 1]) {
                     var temp = arr[j];
                     arr[j] = arr[j + 1];

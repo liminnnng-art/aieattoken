@@ -1,1 +1,1 @@
-!v3;move(n:int,from:string,to:string,via:string){if (n==1){pf("Move disk 1 from %s to %s%n",from,to);^};move(n-1,from,via,to);pf("Move disk %d from %s to %s%n",n,from,to);move(n-1,via,to,from)};main(args:[]string){disks:=4;pl("Towers of Hanoi with "+disks+" disks:");move(disks,"A","C","B")}
+!java-v1;move(int n,String from,String to,String via){if n==1{pf("Move disk 1 from %s to %s%n",from,to);^};move(n-1,from,via,to);pf("Move disk %d from %s to %s%n",n,from,to);move(n-1,via,to,from)};main(){disks:=4;pl("Towers of Hanoi with "+disks+" disks:");move(disks,"A","C","B")}

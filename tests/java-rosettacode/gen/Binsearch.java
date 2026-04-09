@@ -1,10 +1,10 @@
 
-public class Binsearch {
+public class Binsearch.aet {
 
     public static int binarySearch(int[] arr, int target) {
         var lo = 0;
         var hi = arr.length - 1;
-        while ((lo <= hi)) {
+        while (lo <= hi) {
             var mid = lo + (hi - lo) / 2;
             if (arr[mid] == target) {
                 return mid;

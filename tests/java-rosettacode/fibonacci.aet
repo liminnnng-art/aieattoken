@@ -1,1 +1,1 @@
-!v3;fib(n:int)->int64{if (n<2){^n};^fib(n-1)+fib(n-2)};main(args:[]string){for i:=1;i<=16;i++{pf("%d ",fib(i))};pl()}
+!java-v1;fib(int n)->long{if n<2{^n};fib(n-1)+fib(n-2)};main(){for(i:=1;i<=16;i++){pf("%d ",fib(i))};pl()}

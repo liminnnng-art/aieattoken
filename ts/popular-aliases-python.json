@@ -1,0 +1,36 @@
+{
+  "_version": "0.1",
+  "_tokenizer": "cl100k_base",
+  "_description": "Python third-party library alias mapping for AET-Python. Every alias is a single cl100k_base token.",
+  "_count": 7,
+  "aliases": {
+    "rg": {
+      "python": "requests.get",
+      "pkg": "requests"
+    },
+    "rp": {
+      "python": "requests.post",
+      "pkg": "requests"
+    },
+    "DF": {
+      "python": "pd.DataFrame",
+      "pkg": "pandas"
+    },
+    "Sr": {
+      "python": "pd.Series",
+      "pkg": "pandas"
+    },
+    "na": {
+      "python": "np.array",
+      "pkg": "numpy"
+    },
+    "nz": {
+      "python": "np.zeros",
+      "pkg": "numpy"
+    },
+    "no": {
+      "python": "np.ones",
+      "pkg": "numpy"
+    }
+  }
+}

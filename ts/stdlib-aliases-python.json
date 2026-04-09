@@ -1,0 +1,152 @@
+{
+  "_version": "0.1",
+  "_tokenizer": "cl100k_base",
+  "_description": "Python stdlib alias mapping for AET-Python. Every alias is a single cl100k_base token.",
+  "_count": 33,
+  "aliases": {
+    "jd": {
+      "python": "json.dumps",
+      "pkg": "json"
+    },
+    "jl": {
+      "python": "json.loads",
+      "pkg": "json"
+    },
+    "jld": {
+      "python": "json.load",
+      "pkg": "json"
+    },
+    "jdp": {
+      "python": "json.dump",
+      "pkg": "json"
+    },
+    "pj": {
+      "python": "os.path.join",
+      "pkg": "os.path"
+    },
+    "pe": {
+      "python": "os.path.exists",
+      "pkg": "os.path"
+    },
+    "Pa": {
+      "python": "Path",
+      "pkg": "pathlib",
+      "fromImport": "from pathlib import Path"
+    },
+    "oe": {
+      "python": "os.environ",
+      "pkg": "os"
+    },
+    "gl": {
+      "python": "logging.getLogger",
+      "pkg": "logging"
+    },
+    "li": {
+      "python": "logging.info",
+      "pkg": "logging"
+    },
+    "lw": {
+      "python": "logging.warning",
+      "pkg": "logging"
+    },
+    "le": {
+      "python": "logging.error",
+      "pkg": "logging"
+    },
+    "dd": {
+      "python": "defaultdict",
+      "pkg": "collections",
+      "fromImport": "from collections import defaultdict"
+    },
+    "Ct": {
+      "python": "Counter",
+      "pkg": "collections",
+      "fromImport": "from collections import Counter"
+    },
+    "dq": {
+      "python": "deque",
+      "pkg": "collections",
+      "fromImport": "from collections import deque"
+    },
+    "dn": {
+      "python": "datetime.now",
+      "pkg": "datetime",
+      "fromImport": "from datetime import datetime"
+    },
+    "td": {
+      "python": "timedelta",
+      "pkg": "datetime",
+      "fromImport": "from datetime import timedelta"
+    },
+    "ar": {
+      "python": "asyncio.run",
+      "pkg": "asyncio"
+    },
+    "ag": {
+      "python": "asyncio.gather",
+      "pkg": "asyncio"
+    },
+    "asl": {
+      "python": "asyncio.sleep",
+      "pkg": "asyncio"
+    },
+    "sa": {
+      "python": "sys.argv",
+      "pkg": "sys"
+    },
+    "sx": {
+      "python": "sys.exit",
+      "pkg": "sys"
+    },
+    "rm": {
+      "python": "re.match",
+      "pkg": "re"
+    },
+    "rs": {
+      "python": "re.search",
+      "pkg": "re"
+    },
+    "rc": {
+      "python": "re.compile",
+      "pkg": "re"
+    },
+    "ic": {
+      "python": "itertools.chain",
+      "pkg": "itertools"
+    },
+    "ig": {
+      "python": "itertools.groupby",
+      "pkg": "itertools"
+    },
+    "lc": {
+      "python": "lru_cache",
+      "pkg": "functools",
+      "fromImport": "from functools import lru_cache"
+    },
+    "fi": {
+      "python": "field",
+      "pkg": "dataclasses",
+      "fromImport": "from dataclasses import field"
+    },
+    "isi": {
+      "python": "isinstance",
+      "pkg": "builtins",
+      "auto": true
+    },
+    "iss": {
+      "python": "issubclass",
+      "pkg": "builtins",
+      "auto": true
+    },
+    "ha": {
+      "python": "hasattr",
+      "pkg": "builtins",
+      "auto": true
+    },
+    "rv": {
+      "python": "reversed",
+      "pkg": "builtins",
+      "auto": true
+    }
+  }
+}

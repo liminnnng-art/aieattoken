@@ -1,1 +1,1 @@
-!v3;main(args:[]string){input:="Hello,How,Are,You,Today";tokens:=input.split(",");pl("Input:  "+input);pl("Tokens: "+String.join(", ",tokens));joined:=String.join(".",tokens);pl("Joined: "+joined)}
+!java-v1;main(){input:="Hello,How,Are,You,Today";tokens:=input.split(",");pl("Input:  "+input);pl("Tokens: "+String.join(", ",tokens));joined:=String.join(".",tokens);pl("Joined: "+joined)}

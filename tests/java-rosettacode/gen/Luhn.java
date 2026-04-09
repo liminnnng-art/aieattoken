@@ -1,10 +1,10 @@
 
-public class Luhn {
+public class Luhn.aet {
 
     public static boolean luhnCheck(String number) {
         var sum = 0;
         var alternate = false;
-        for (var i = number.length() - 1; i >= 0; i--) {
+        for (var i = number.length() - 1; i >= 0; --i) {
             var digit = number.charAt(i) - '0';
             if (alternate) {
                 digit *= 2;

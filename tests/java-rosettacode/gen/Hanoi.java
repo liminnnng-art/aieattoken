@@ -1,5 +1,5 @@
 
-public class Hanoi {
+public class Hanoi.aet {
 
     public static void move(int n, String from, String to, String via) {
         if (n == 1) {

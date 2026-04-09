@@ -82,7 +82,21 @@ class ImportTracker {
         }
     }
     getImports() {
-        return [...this.imports].sort();
+        // Deduplicate: if java.util.* is present, remove specific java.util.X imports
+        const imps = [...this.imports];
+        const hasWildcard = new Set();
+        for (const imp of imps) {
+            if (imp.endsWith(".*")) {
+                hasWildcard.add(imp.replace(".*", ""));
+            }
+        }
+        const filtered = imps.filter(imp => {
+            if (imp.endsWith(".*"))
+                return true;
+            const pkg = imp.substring(0, imp.lastIndexOf("."));
+            return !hasWildcard.has(pkg);
+        });
+        return filtered.sort();
     }
 }
 // ─── Module-level state reset per emit call ────────────────────────────────────
@@ -144,6 +158,12 @@ export function emit(program, options) {
     genericClassNames = new Set();
     enumValueToType = new Map();
     sealedInterfaceNames = new Set();
+    // Seed imports from the IR program (transformer already resolved aliases)
+    if (program.imports) {
+        for (const imp of program.imports) {
+            imports.add(imp.path);
+        }
+    }
     // Pre-scan for generic class declarations, enum values, and sealed interfaces
     for (const decl of program.decls) {
         collectGenericClassNames(decl);
@@ -850,7 +870,8 @@ function emitJavaClassDecl(node, level) {
     // Add non-sealed modifier if the class implements interfaces and isn't already sealed/non-sealed/final
     const mods = [...node.modifiers];
     // Inner classes (level > 0) should be static unless already marked
-    if (level > 0 && !mods.includes("static")) {
+    // Exception: anonymous inner classes (__Anon_*) need instance access, so stay non-static
+    if (level > 0 && !mods.includes("static") && !node.name.startsWith("__Anon_")) {
         // Insert static after access modifier or at the start
         const accessIdx = Math.max(mods.indexOf("public"), mods.indexOf("private"), mods.indexOf("protected"));
         if (accessIdx >= 0) {
@@ -934,14 +955,19 @@ function emitJavaClassDecl(node, level) {
     }
     else {
         // Emit explicit constructors AND auto-generate all-args constructor if needed
-        // Check if any existing constructor uses this(args) delegation — need the target
-        const needsAllArgsCtor = hasFinalFields && uninitFields.length > 0 &&
-            node.constructors.some(c => {
-                // Check if constructor body contains this(...) call
-                return c.body.stmts.some(s => s.kind === "ExprStmt" && s.expr?.kind === "CallExpr" &&
-                    s.expr?.func?.name === "this");
-            }) &&
-            !node.constructors.some(c => c.params.length === uninitFields.length);
+        // Case 1: existing constructor uses this(args) delegation — need the all-args target
+        // Case 2: only a no-arg constructor exists + fields → also need all-args ctor
+        //         (the reverse parser drops auto-generatable all-args ctors, so we restore them)
+        const hasNoArgCtorOnly = node.constructors.length === 1 &&
+            node.constructors[0].params.length === 0;
+        const hasThisDelegation = node.constructors.some(c => {
+            return c.body.stmts.some(s => s.kind === "ExprStmt" && s.expr?.kind === "CallExpr" &&
+                s.expr?.func?.name === "this");
+        });
+        const alreadyHasAllArgsCtor = node.constructors.some(c => c.params.length === uninitFields.length);
+        const needsAllArgsCtor = uninitFields.length > 0 && !alreadyHasAllArgsCtor &&
+            ((hasFinalFields && hasThisDelegation) ||
+                (hasNoArgCtorOnly && uninitFields.length > 0));
         if (needsAllArgsCtor) {
             lines.push("");
             const ctorParams = uninitFields.map(f => `${mapType(f.type)} ${f.name}`).join(", ");
@@ -1470,6 +1496,13 @@ function emitCallExpr(expr) {
             if (mapped)
                 return mapped;
         }
+    }
+    // Emit type witness args: e.g., Map.Entry.<String, Integer>comparingByValue()
+    const typeArgs = expr.javaTypeArgs;
+    if (typeArgs && typeArgs.length > 0 && expr.func.kind === "SelectorExpr") {
+        const sel = expr.func;
+        return `${emitExpr(sel.x)}.<${typeArgs.join(", ")}>` +
+            `${sel.sel}(${args})`;
     }
     const funcStr = emitExpr(expr.func);
     // If calling an uppercase name that matches a known generic class, emit as new ClassName<>(args)

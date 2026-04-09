@@ -1,0 +1,502 @@
+[
+  {
+    "file": "async_fetcher.py",
+    "original_tokens": 1378,
+    "lines": 189,
+    "non_empty_lines": 154,
+    "compression": {
+      "indentation": {
+        "saving": 126,
+        "pct": "9.1"
+      },
+      "braces_vs_indent": {
+        "braced_tokens": 1339,
+        "vs_original": 39,
+        "pct": "2.8"
+      },
+      "docstrings": {
+        "saving": 114,
+        "pct": "8.3"
+      },
+      "type_hints": {
+        "saving": 51,
+        "pct": "3.7"
+      },
+      "self": {
+        "saving": 24,
+        "pct": "1.7"
+      },
+      "imports": {
+        "saving": 44,
+        "pct": "3.2"
+      },
+      "comments": {
+        "saving": 19,
+        "pct": "1.4"
+      },
+      "magic_methods": {
+        "saving": 6,
+        "pct": "0.4"
+      },
+      "decorators": {
+        "tokens": 16,
+        "pct": "1.2"
+      }
+    },
+    "combined": {
+      "compressed_tokens": 1092,
+      "saving": 286,
+      "saving_pct": "20.8"
+    }
+  },
+  {
+    "file": "calculator.py",
+    "original_tokens": 674,
+    "lines": 113,
+    "non_empty_lines": 89,
+    "compression": {
+      "indentation": {
+        "saving": 80,
+        "pct": "11.9"
+      },
+      "braces_vs_indent": {
+        "braced_tokens": 657,
+        "vs_original": 17,
+        "pct": "2.5"
+      },
+      "docstrings": {
+        "saving": 145,
+        "pct": "21.5"
+      },
+      "type_hints": {
+        "saving": 12,
+        "pct": "1.8"
+      },
+      "self": {
+        "saving": 5,
+        "pct": "0.7"
+      },
+      "imports": {
+        "saving": 8,
+        "pct": "1.2"
+      },
+      "comments": {
+        "saving": 0,
+        "pct": "0.0"
+      },
+      "magic_methods": {
+        "saving": 0,
+        "pct": "0.0"
+      },
+      "decorators": {
+        "tokens": 3,
+        "pct": "0.4"
+      }
+    },
+    "combined": {
+      "compressed_tokens": 469,
+      "saving": 205,
+      "saving_pct": "30.4"
+    }
+  },
+  {
+    "file": "class_hierarchy.py",
+    "original_tokens": 1530,
+    "lines": 213,
+    "non_empty_lines": 158,
+    "compression": {
+      "indentation": {
+        "saving": 148,
+        "pct": "9.7"
+      },
+      "braces_vs_indent": {
+        "braced_tokens": 1483,
+        "vs_original": 47,
+        "pct": "3.1"
+      },
+      "docstrings": {
+        "saving": 99,
+        "pct": "6.5"
+      },
+      "type_hints": {
+        "saving": 92,
+        "pct": "6.0"
+      },
+      "self": {
+        "saving": 70,
+        "pct": "4.6"
+      },
+      "imports": {
+        "saving": 43,
+        "pct": "2.8"
+      },
+      "comments": {
+        "saving": 8,
+        "pct": "0.5"
+      },
+      "magic_methods": {
+        "saving": 14,
+        "pct": "0.9"
+      },
+      "decorators": {
+        "tokens": 43,
+        "pct": "2.8"
+      }
+    },
+    "combined": {
+      "compressed_tokens": 1214,
+      "saving": 316,
+      "saving_pct": "20.7"
+    }
+  },
+  {
+    "file": "cli_tool.py",
+    "original_tokens": 1916,
+    "lines": 257,
+    "non_empty_lines": 208,
+    "compression": {
+      "indentation": {
+        "saving": 178,
+        "pct": "9.3"
+      },
+      "braces_vs_indent": {
+        "braced_tokens": 1828,
+        "vs_original": 88,
+        "pct": "4.6"
+      },
+      "docstrings": {
+        "saving": 108,
+        "pct": "5.6"
+      },
+      "type_hints": {
+        "saving": 35,
+        "pct": "1.8"
+      },
+      "self": {
+        "saving": 5,
+        "pct": "0.3"
+      },
+      "imports": {
+        "saving": 51,
+        "pct": "2.7"
+      },
+      "comments": {
+        "saving": 49,
+        "pct": "2.6"
+      },
+      "magic_methods": {
+        "saving": 0,
+        "pct": "0.0"
+      },
+      "decorators": {
+        "tokens": 6,
+        "pct": "0.3"
+      }
+    },
+    "combined": {
+      "compressed_tokens": 1582,
+      "saving": 334,
+      "saving_pct": "17.4"
+    }
+  },
+  {
+    "file": "csv_reader.py",
+    "original_tokens": 662,
+    "lines": 85,
+    "non_empty_lines": 65,
+    "compression": {
+      "indentation": {
+        "saving": 54,
+        "pct": "8.2"
+      },
+      "braces_vs_indent": {
+        "braced_tokens": 644,
+        "vs_original": 18,
+        "pct": "2.7"
+      },
+      "docstrings": {
+        "saving": 93,
+        "pct": "14.0"
+      },
+      "type_hints": {
+        "saving": 18,
+        "pct": "2.7"
+      },
+      "self": {
+        "saving": 1,
+        "pct": "0.2"
+      },
+      "imports": {
+        "saving": 17,
+        "pct": "2.6"
+      },
+      "comments": {
+        "saving": 0,
+        "pct": "0.0"
+      },
+      "magic_methods": {
+        "saving": 0,
+        "pct": "0.0"
+      },
+      "decorators": {
+        "tokens": 13,
+        "pct": "2.0"
+      }
+    },
+    "combined": {
+      "compressed_tokens": 517,
+      "saving": 145,
+      "saving_pct": "21.9"
+    }
+  },
+  {
+    "file": "data_processor.py",
+    "original_tokens": 1681,
+    "lines": 187,
+    "non_empty_lines": 151,
+    "compression": {
+      "indentation": {
+        "saving": 120,
+        "pct": "7.1"
+      },
+      "braces_vs_indent": {
+        "braced_tokens": 1653,
+        "vs_original": 28,
+        "pct": "1.7"
+      },
+      "docstrings": {
+        "saving": 145,
+        "pct": "8.6"
+      },
+      "type_hints": {
+        "saving": 81,
+        "pct": "4.8"
+      },
+      "self": {
+        "saving": 1,
+        "pct": "0.1"
+      },
+      "imports": {
+        "saving": 42,
+        "pct": "2.5"
+      },
+      "comments": {
+        "saving": 18,
+        "pct": "1.1"
+      },
+      "magic_methods": {
+        "saving": 0,
+        "pct": "0.0"
+      },
+      "decorators": {
+        "tokens": 16,
+        "pct": "1.0"
+      }
+    },
+    "combined": {
+      "compressed_tokens": 1406,
+      "saving": 275,
+      "saving_pct": "16.4"
+    }
+  },
+  {
+    "file": "fizzbuzz.py",
+    "original_tokens": 388,
+    "lines": 51,
+    "non_empty_lines": 38,
+    "compression": {
+      "indentation": {
+        "saving": 29,
+        "pct": "7.5"
+      },
+      "braces_vs_indent": {
+        "braced_tokens": 383,
+        "vs_original": 5,
+        "pct": "1.3"
+      },
+      "docstrings": {
+        "saving": 112,
+        "pct": "28.9"
+      },
+      "type_hints": {
+        "saving": 14,
+        "pct": "3.6"
+      },
+      "self": {
+        "saving": 0,
+        "pct": "0.0"
+      },
+      "imports": {
+        "saving": 10,
+        "pct": "2.6"
+      },
+      "comments": {
+        "saving": 0,
+        "pct": "0.0"
+      },
+      "magic_methods": {
+        "saving": 0,
+        "pct": "0.0"
+      },
+      "decorators": {
+        "tokens": 0,
+        "pct": "0.0"
+      }
+    },
+    "combined": {
+      "compressed_tokens": 249,
+      "saving": 139,
+      "saving_pct": "35.8"
+    }
+  },
+  {
+    "file": "flask_api.py",
+    "original_tokens": 1257,
+    "lines": 179,
+    "non_empty_lines": 139,
+    "compression": {
+      "indentation": {
+        "saving": 104,
+        "pct": "8.3"
+      },
+      "braces_vs_indent": {
+        "braced_tokens": 1215,
+        "vs_original": 42,
+        "pct": "3.3"
+      },
+      "docstrings": {
+        "saving": 90,
+        "pct": "7.2"
+      },
+      "type_hints": {
+        "saving": 55,
+        "pct": "4.4"
+      },
+      "self": {
+        "saving": 13,
+        "pct": "1.0"
+      },
+      "imports": {
+        "saving": 42,
+        "pct": "3.3"
+      },
+      "comments": {
+        "saving": 13,
+        "pct": "1.0"
+      },
+      "magic_methods": {
+        "saving": 2,
+        "pct": "0.2"
+      },
+      "decorators": {
+        "tokens": 69,
+        "pct": "5.5"
+      }
+    },
+    "combined": {
+      "compressed_tokens": 1035,
+      "saving": 222,
+      "saving_pct": "17.7"
+    }
+  },
+  {
+    "file": "orm_models.py",
+    "original_tokens": 3789,
+    "lines": 526,
+    "non_empty_lines": 410,
+    "compression": {
+      "indentation": {
+        "saving": 358,
+        "pct": "9.4"
+      },
+      "braces_vs_indent": {
+        "braced_tokens": 3683,
+        "vs_original": 106,
+        "pct": "2.8"
+      },
+      "docstrings": {
+        "saving": 194,
+        "pct": "5.1"
+      },
+      "type_hints": {
+        "saving": 267,
+        "pct": "7.0"
+      },
+      "self": {
+        "saving": 108,
+        "pct": "2.9"
+      },
+      "imports": {
+        "saving": 47,
+        "pct": "1.2"
+      },
+      "comments": {
+        "saving": 132,
+        "pct": "3.5"
+      },
+      "magic_methods": {
+        "saving": 28,
+        "pct": "0.7"
+      },
+      "decorators": {
+        "tokens": 70,
+        "pct": "1.8"
+      }
+    },
+    "combined": {
+      "compressed_tokens": 3058,
+      "saving": 731,
+      "saving_pct": "19.3"
+    }
+  },
+  {
+    "file": "task_scheduler.py",
+    "original_tokens": 4091,
+    "lines": 604,
+    "non_empty_lines": 480,
+    "compression": {
+      "indentation": {
+        "saving": 387,
+        "pct": "9.5"
+      },
+      "braces_vs_indent": {
+        "braced_tokens": 3996,
+        "vs_original": 95,
+        "pct": "2.3"
+      },
+      "docstrings": {
+        "saving": 262,
+        "pct": "6.4"
+      },
+      "type_hints": {
+        "saving": 211,
+        "pct": "5.2"
+      },
+      "self": {
+        "saving": 110,
+        "pct": "2.7"
+      },
+      "imports": {
+        "saving": 69,
+        "pct": "1.7"
+      },
+      "comments": {
+        "saving": 178,
+        "pct": "4.4"
+      },
+      "magic_methods": {
+        "saving": 19,
+        "pct": "0.5"
+      },
+      "decorators": {
+        "tokens": 80,
+        "pct": "2.0"
+      }
+    },
+    "combined": {
+      "compressed_tokens": 3240,
+      "saving": 851,
+      "saving_pct": "20.8"
+    }
+  }
+]

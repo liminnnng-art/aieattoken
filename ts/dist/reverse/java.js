@@ -11,6 +11,9 @@ import * as IR from "../ir.js";
 let javaReverseAliasMap = Object.create(null);
 // Track which aliases are constructors: "new StringBuilder" → "Sb"
 let javaConstructorAliases = Object.create(null);
+// Accumulator for anonymous inner classes → named inner classes
+let _anonClassCounter = 0;
+let _pendingAnonClasses = [];
 export function loadJavaReverseAliases(path) {
     try {
         const p = path || resolve(process.cwd(), "..", "stdlib-aliases-java.json");
@@ -207,6 +210,8 @@ function typeNodeName(node) {
 // javaAstToIR — main entry point: Java JSON AST → IR
 // ---------------------------------------------------------------------------
 export function javaAstToIR(javaAst) {
+    _anonClassCounter = 0;
+    _pendingAnonClasses = [];
     const decls = [];
     for (const decl of javaAst.Decls || []) {
         switch (decl.Kind) {
@@ -319,6 +324,9 @@ function convertClassDecl(node, out) {
             field.javaInit = convertExpr(f.Init);
         return field;
     });
+    // Save and reset anon class accumulator before processing methods
+    const savedAnon = _pendingAnonClasses;
+    _pendingAnonClasses = [];
     const irMethods = methods.map(convertMethodDecl);
     const irConstructors = constructors.map(convertConstructorDecl);
     const irInnerClasses = [];
@@ -327,6 +335,9 @@ function convertClassDecl(node, out) {
             irInnerClasses.push(convertClassToJavaClassDecl(ic));
         }
     }
+    // Flush anonymous inner classes generated during method conversion
+    irInnerClasses.push(..._pendingAnonClasses);
+    _pendingAnonClasses = savedAnon;
     out.push({
         kind: "Java_ClassDecl",
         name,
@@ -360,6 +371,21 @@ function convertClassToJavaClassDecl(node) {
     const tps = (node.TypeParams || []).map((tp) => tp.Name || tp);
     if (tps.length > 0)
         fullName += "<" + tps.join(", ") + ">";
+    // Save and reset anon class accumulator before processing methods
+    const savedAnon = _pendingAnonClasses;
+    _pendingAnonClasses = [];
+    const irMethods = methods.map(convertMethodDecl);
+    const irCtors = constructors.map(convertConstructorDecl);
+    const irInner = innerClasses.map((ic) => {
+        if (ic.Kind === "ClassDecl")
+            return convertClassToJavaClassDecl(ic);
+        // Wrap non-class inner types in a pseudo Java_ClassDecl for the array type
+        // (The actual conversion will be handled in the AETJ emitter)
+        return convertClassToJavaClassDecl(ic);
+    });
+    // Flush anonymous inner classes generated during method conversion
+    irInner.push(..._pendingAnonClasses);
+    _pendingAnonClasses = savedAnon;
     return {
         kind: "Java_ClassDecl",
         name: fullName,
@@ -367,15 +393,9 @@ function convertClassToJavaClassDecl(node) {
         superClass: node.Extends ? typeNodeName(node.Extends) : undefined,
         interfaces: (node.Implements || []).map(javaTypeNodeName),
         fields: irFields,
-        methods: methods.map(convertMethodDecl),
-        constructors: constructors.map(convertConstructorDecl),
-        innerClasses: innerClasses.map((ic) => {
-            if (ic.Kind === "ClassDecl")
-                return convertClassToJavaClassDecl(ic);
-            // Wrap non-class inner types in a pseudo Java_ClassDecl for the array type
-            // (The actual conversion will be handled in the AETJ emitter)
-            return convertClassToJavaClassDecl(ic);
-        }),
+        methods: irMethods,
+        constructors: irCtors,
+        innerClasses: irInner,
         stmtIndex: 0,
     };
 }
@@ -601,7 +621,13 @@ function convertMethodDecl(node) {
         result.typeParams = methodTypeParams;
     }
     // Preserve Java-specific metadata for AET-Java output
-    result.javaModifiers = node.Modifiers || [];
+    const modifiers = [...(node.Modifiers || [])];
+    // Preserve @Override annotation as a modifier for the emitter
+    const annotations = node.Annotations || [];
+    if (annotations.some((a) => a.Name?.Name === "Override" || a.Name === "Override")) {
+        modifiers.push("override");
+    }
+    result.javaModifiers = modifiers;
     result.javaReturnTypeName = node.ReturnType ? javaTypeNodeName(node.ReturnType) : "";
     result.javaParams = (node.Params || []).map((p) => ({
         name: p.Name || "_",
@@ -652,10 +678,58 @@ function convertFieldToVarDecl(node) {
 function convertBlockStmt(node) {
     if (!node || !node.Stmts)
         return { kind: "BlockStmt", stmts: [] };
-    return {
-        kind: "BlockStmt",
-        stmts: node.Stmts.map(convertStmt).filter(Boolean),
-    };
+    const stmts = [];
+    for (const s of node.Stmts) {
+        const converted = convertStmt(s);
+        if (!converted)
+            continue;
+        // Flatten BlockStmt nodes (from chained assignments) into the parent
+        if (converted.kind === "BlockStmt") {
+            stmts.push(...converted.stmts);
+        }
+        else {
+            stmts.push(converted);
+        }
+    }
+    return { kind: "BlockStmt", stmts };
+}
+/** Collect post-increment/decrement side effects from within assignment expressions.
+ *  e.g., arr[i++] = val → adds "i++" as a separate IncDecStmt after the assignment. */
+function collectPostIncDecSideEffects(node, stmts) {
+    // Check if the target of the assignment has a post-inc/dec index
+    const target = node.Target;
+    if (target?.Kind === "ArrayAccess" && target.Index?.Kind === "UnaryExpr") {
+        const op = target.Index.Op;
+        if (op === "post++" || op === "++pre" || op === "POSTFIX_INCREMENT" || op === "PREFIX_INCREMENT") {
+            stmts.push({ kind: "IncDecStmt", x: convertExpr(target.Index.X), op: "++", stmtIndex: 0 });
+        }
+        else if (op === "post--" || op === "--pre" || op === "POSTFIX_DECREMENT" || op === "PREFIX_DECREMENT") {
+            stmts.push({ kind: "IncDecStmt", x: convertExpr(target.Index.X), op: "--", stmtIndex: 0 });
+        }
+    }
+}
+/** Flatten chained assignment: head = tail = node → [tail = node, head = node] */
+function flattenChainedAssign(node) {
+    const targets = [];
+    let value = node;
+    while (value.Kind === "AssignExpr") {
+        targets.push(value.Target);
+        value = value.Value;
+    }
+    // value is now the final RHS (e.g., "node")
+    const rhs = convertExpr(value);
+    // Emit assignments in reverse order (innermost first) so all targets get the value
+    const stmts = [];
+    for (let i = targets.length - 1; i >= 0; i--) {
+        stmts.push({
+            kind: "AssignStmt",
+            lhs: [convertExpr(targets[i])],
+            rhs: [rhs],
+            op: "=",
+            stmtIndex: 0,
+        });
+    }
+    return stmts;
 }
 function convertStmt(node) {
     if (!node)
@@ -665,13 +739,15 @@ function convertStmt(node) {
             // Check if inner expression is an assignment (Java treats assignments as expressions)
             const inner = node.Expr;
             if (inner?.Kind === "AssignExpr") {
-                return {
-                    kind: "AssignStmt",
-                    lhs: [convertExpr(inner.Target)],
-                    rhs: [convertExpr(inner.Value)],
-                    op: "=",
-                    stmtIndex: 0,
-                };
+                // Handle chained assignments: head = tail = node → tail = node; head = node
+                const stmts = flattenChainedAssign(inner);
+                // Extract post-increment/decrement side effects from array indices
+                // e.g., arr[i++] = val → arr[i] = val; i++
+                collectPostIncDecSideEffects(inner, stmts);
+                if (stmts.length > 1) {
+                    return { kind: "BlockStmt", stmts };
+                }
+                return stmts[0];
             }
             if (inner?.Kind === "CompoundAssignExpr") {
                 return {
@@ -1205,8 +1281,10 @@ function convertLiteral(node) {
     const value = node.Value ?? "null";
     switch (litType) {
         case "int":
-        case "long":
             return { kind: "BasicLit", type: "INT", value };
+        case "long":
+            // Preserve long suffix so the emitter can produce `1L` instead of `1`
+            return { kind: "BasicLit", type: "INT", value: value.endsWith("L") || value.endsWith("l") ? value : value + "L" };
         case "float":
         case "double":
             return { kind: "BasicLit", type: "FLOAT", value };
@@ -1338,7 +1416,43 @@ function convertFieldAccess(node) {
 }
 function convertNewExpr(node) {
     const typeName = typeNodeName(node.Type);
+    const javaTypeName = javaTypeNodeName(node.Type);
     const args = (node.Args || []).map(convertExpr);
+    // Anonymous inner class: new Interface() { ... } → named inner class
+    if (node.Body && node.Body.Kind === "ClassDecl") {
+        const anonBody = node.Body;
+        const members = anonBody.Body || [];
+        _anonClassCounter++;
+        const anonName = `__Anon_${_anonClassCounter}`;
+        const methods = members.filter((m) => m.Kind === "MethodDecl");
+        const fields = members.filter((m) => m.Kind === "VarDecl");
+        const irFields = fields.map((f) => {
+            const field = { name: f.Name, type: mapJavaType(f.Type) };
+            field.javaModifiers = f.Modifiers || [];
+            field.javaTypeName = javaTypeNodeName(f.Type);
+            if (f.Init)
+                field.javaInit = convertExpr(f.Init);
+            return field;
+        });
+        const anonClass = {
+            kind: "Java_ClassDecl",
+            name: anonName,
+            modifiers: [], // NOT static — must access enclosing instance fields
+            superClass: undefined,
+            interfaces: [javaTypeName],
+            fields: irFields,
+            methods: methods.map(convertMethodDecl),
+            constructors: [],
+            innerClasses: [],
+            stmtIndex: 0,
+        };
+        _pendingAnonClasses.push(anonClass);
+        return {
+            kind: "Java_NewExpr",
+            type: IR.simpleType(anonName),
+            args,
+        };
+    }
     // Check constructor aliases: "StringBuilder" → "Sb"
     const alias = javaConstructorAliases[typeName];
     if (alias) {
@@ -1698,8 +1812,52 @@ export function javaIrToAETJ(program) {
     // Pre-scan to collect all enum declarations
     for (const decl of program.decls)
         collectEnumDecls(decl);
+    // Group StructDecl + their receiver methods into class bodies
+    const structReceiverMap = new Map();
+    for (const decl of program.decls) {
+        if (decl.kind === "FuncDecl" && decl.receiver) {
+            const recvType = decl.receiver.type.name.replace(/^\*/, "");
+            if (!structReceiverMap.has(recvType))
+                structReceiverMap.set(recvType, []);
+            structReceiverMap.get(recvType).push(decl);
+        }
+    }
+    // Collect StructDecl names and standalone (non-receiver) FuncDecls
+    const structNames = new Set();
+    const standaloneFuncs = [];
+    for (const decl of program.decls) {
+        if (decl.kind === "StructDecl") {
+            structNames.add(decl.name);
+        }
+        else if (decl.kind === "FuncDecl" && !decl.receiver) {
+            standaloneFuncs.push(decl);
+        }
+    }
+    // When there is exactly one StructDecl and standalone funcs exist,
+    // include the standalone funcs inside the StructDecl body (they were
+    // originally static methods in the same class, e.g. main()).
+    const includeStandaloneInStruct = structNames.size === 1 && standaloneFuncs.length > 0;
+    const standaloneSet = includeStandaloneInStruct ? new Set(standaloneFuncs) : new Set();
     const parts = ["!java-v1"];
     for (const decl of program.decls) {
+        // Skip receiver methods — they'll be emitted inside their StructDecl
+        if (decl.kind === "FuncDecl" && decl.receiver) {
+            continue;
+        }
+        // Skip standalone funcs that will be folded into the StructDecl
+        if (decl.kind === "FuncDecl" && standaloneSet.has(decl)) {
+            continue;
+        }
+        // For StructDecl, collect its receiver methods (and standalone funcs) and emit together
+        if (decl.kind === "StructDecl") {
+            const struct = decl;
+            const receivers = structReceiverMap.get(struct.name) || [];
+            const allMethods = includeStandaloneInStruct ? [...receivers, ...standaloneFuncs] : receivers;
+            const s = aetjStructAsClassWithMethods(struct, allMethods);
+            if (s)
+                parts.push(s);
+            continue;
+        }
         const s = aetjNode(decl);
         if (s)
             parts.push(s);
@@ -2246,12 +2404,22 @@ function aetjSealedInterfaceDecl(node) {
 // AET-Java struct-as-class (for IRStructDecl that came from data classes)
 // ---------------------------------------------------------------------------
 function aetjStructAsClass(node) {
-    // Emit as a class with fields
+    return aetjStructAsClassWithMethods(node, []);
+}
+function aetjStructAsClassWithMethods(node, methods) {
+    // Emit as a class with fields AND receiver methods inside the body
     let s = `@${node.name}{`;
-    s += node.fields.map(f => {
+    const bodyParts = [];
+    // Fields
+    for (const f of node.fields) {
         const typeName = aetjFieldTypeName(f);
-        return `!${typeName} ${f.name}`;
-    }).join(";");
+        bodyParts.push(`!${typeName} ${f.name}`);
+    }
+    // Methods (stripped of receiver — they're now inside the class)
+    for (const m of methods) {
+        bodyParts.push(aetjMethodInClass(m));
+    }
+    s += bodyParts.join(";");
     s += "}";
     return s;
 }
@@ -2355,6 +2523,13 @@ function aetjExpr(expr) {
             const funcStr = (expr.func.kind === "Ident" && expr.func.name === "nil")
                 ? "nil"
                 : aetjExpr(expr.func);
+            // Emit type witness args: Map.Entry.<String,Integer>comparingByValue()
+            const typeArgs = expr.javaTypeArgs;
+            if (typeArgs && typeArgs.length > 0 && expr.func.kind === "SelectorExpr") {
+                const sel = expr.func;
+                return `${aetjExpr(sel.x)}.<${typeArgs.join(",")}>` +
+                    `${sel.sel}(${expr.args.map(aetjExpr).join(",")})`;
+            }
             return `${funcStr}(${expr.args.map(aetjExpr).join(",")})`;
         }
         case "SelectorExpr": {
@@ -2405,9 +2580,13 @@ function aetjExpr(expr) {
         case "PipeExpr":
             return `${aetjExpr(expr.x)}|${expr.op}(${aetjExpr(expr.fn)})`;
         // ---- Java-specific expressions ----
-        case "Java_NewExpr":
+        case "Java_NewExpr": {
             // new Type(args) → Type(args)  (omit new)
-            return `${irTypeToJavaName(expr.type)}(${expr.args.map(aetjExpr).join(",")})`;
+            // Exception: __Anon_* classes need explicit 'new' since they start with _
+            const typeName = irTypeToJavaName(expr.type);
+            const prefix = typeName.startsWith("__Anon_") ? "new " : "";
+            return `${prefix}${typeName}(${expr.args.map(aetjExpr).join(",")})`;
+        }
         case "Java_LambdaExpr": {
             // Lambda → {params|body}
             const paramNames = expr.params.map(p => p.name).join(",");

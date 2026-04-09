@@ -1,277 +1,284 @@
 {
-  "timestamp": "2026-04-08T06:46:03.206Z",
+  "timestamp": "2026-04-09T13:39:48.806Z",
   "aGroup": [
     {
       "name": "Ackermann",
       "javaTokens": 148,
-      "aetTokens": 103,
-      "saving": "30.4",
+      "aetTokens": 95,
+      "saving": "35.8",
       "status": "PASS",
       "correctness": true,
       "roundTrip": true,
-      "transpileMs": 49599
+      "transpileMs": 324
     },
     {
       "name": "Binsearch",
       "javaTokens": 219,
-      "aetTokens": 153,
-      "saving": "30.1",
-      "status": "ERROR",
-      "correctness": false,
-      "roundTrip": false,
-      "transpileMs": 50303
+      "aetTokens": 142,
+      "saving": "35.2",
+      "status": "PASS",
+      "correctness": true,
+      "roundTrip": true,
+      "transpileMs": 308
     },
     {
       "name": "Bubblesort",
       "javaTokens": 215,
-      "aetTokens": 158,
-      "saving": "26.5",
-      "status": "ERROR",
-      "correctness": false,
-      "roundTrip": false,
-      "transpileMs": 49521
+      "aetTokens": 133,
+      "saving": "38.1",
+      "status": "PASS",
+      "correctness": true,
+      "roundTrip": true,
+      "transpileMs": 311
     },
     {
       "name": "Caesar",
       "javaTokens": 229,
-      "aetTokens": 175,
-      "saving": "23.6",
-      "status": "ERROR",
-      "correctness": false,
-      "roundTrip": false,
-      "transpileMs": 59449
+      "aetTokens": 153,
+      "saving": "33.2",
+      "status": "PASS",
+      "correctness": true,
+      "roundTrip": true,
+      "transpileMs": 310
     },
     {
       "name": "Doors100",
       "javaTokens": 116,
-      "aetTokens": 81,
-      "saving": "30.2",
+      "aetTokens": 75,
+      "saving": "35.3",
       "status": "PASS",
       "correctness": true,
       "roundTrip": true,
-      "transpileMs": 55087
+      "transpileMs": 302
     },
     {
       "name": "Factorial",
       "javaTokens": 87,
-      "aetTokens": 63,
-      "saving": "27.6",
+      "aetTokens": 56,
+      "saving": "35.6",
       "status": "PASS",
       "correctness": true,
       "roundTrip": true,
-      "transpileMs": 57716
+      "transpileMs": 304
     },
     {
       "name": "Fizzbuzz",
       "javaTokens": 112,
-      "aetTokens": 65,
-      "saving": "42.0",
+      "aetTokens": 58,
+      "saving": "48.2",
       "status": "PASS",
       "correctness": true,
       "roundTrip": true,
-      "transpileMs": 58979
+      "transpileMs": 304
     },
     {
       "name": "Gcd",
       "javaTokens": 79,
-      "aetTokens": 48,
-      "saving": "39.2",
+      "aetTokens": 43,
+      "saving": "45.6",
       "status": "PASS",
       "correctness": true,
       "roundTrip": true,
-      "transpileMs": 58188
+      "transpileMs": 304
     },
     {
       "name": "Hanoi",
       "javaTokens": 161,
-      "aetTokens": 117,
-      "saving": "27.3",
+      "aetTokens": 111,
+      "saving": "31.1",
       "status": "PASS",
       "correctness": true,
       "roundTrip": true,
-      "transpileMs": 68111
+      "transpileMs": 308
     },
     {
       "name": "Luhn",
       "javaTokens": 206,
-      "aetTokens": 141,
-      "saving": "31.6",
-      "status": "ERROR",
-      "correctness": false,
-      "roundTrip": false,
-      "transpileMs": 65521
+      "aetTokens": 132,
+      "saving": "35.9",
+      "status": "PASS",
+      "correctness": true,
+      "roundTrip": true,
+      "transpileMs": 308
     },
     {
       "name": "Matrix",
       "javaTokens": 272,
-      "aetTokens": 214,
-      "saving": "21.3",
-      "status": "ERROR",
-      "correctness": false,
+      "aetTokens": 197,
+      "saving": "27.6",
+      "status": "PASS",
+      "correctness": true,
       "roundTrip": false,
-      "transpileMs": 61064
+      "transpileMs": 310
     },
     {
       "name": "Palindrome",
       "javaTokens": 131,
-      "aetTokens": 94,
-      "saving": "28.2",
+      "aetTokens": 86,
+      "saving": "34.4",
       "status": "PASS",
       "correctness": true,
       "roundTrip": true,
-      "transpileMs": 69939
+      "transpileMs": 302
     },
     {
       "name": "Reverse",
       "javaTokens": 91,
-      "aetTokens": 78,
-      "saving": "14.3",
-      "status": "ERROR",
-      "correctness": false,
-      "roundTrip": false,
-      "transpileMs": 59033
+      "aetTokens": 64,
+      "saving": "29.7",
+      "status": "PASS",
+      "correctness": true,
+      "roundTrip": true,
+      "transpileMs": 301
     },
     {
       "name": "Roman",
       "javaTokens": 229,
-      "aetTokens": 188,
-      "saving": "17.9",
-      "status": "ERROR",
-      "correctness": false,
+      "aetTokens": 163,
+      "saving": "28.8",
+      "status": "PASS",
+      "correctness": true,
       "roundTrip": false,
-      "transpileMs": 59844
+      "transpileMs": 304
     },
     {
       "name": "Tokenize",
       "javaTokens": 88,
-      "aetTokens": 62,
-      "saving": "29.5",
+      "aetTokens": 59,
+      "saving": "33.0",
       "status": "PASS",
       "correctness": true,
       "roundTrip": true,
-      "transpileMs": 59607
+      "transpileMs": 304
     },
     {
       "name": "fibonacci",
       "javaTokens": 93,
-      "aetTokens": 0,
-      "saving": "0",
-      "status": "ERROR",
-      "correctness": false,
-      "roundTrip": false,
-      "transpileMs": 0
+      "aetTokens": 51,
+      "saving": "45.2",
+      "status": "PASS",
+      "correctness": true,
+      "roundTrip": true,
+      "transpileMs": 306
     }
   ],
   "bGroup": [
     {
       "name": "b01_maxmin",
       "javaTokens": 465,
-      "aetTokens": 344,
-      "saving": "26.0",
-      "status": "ERROR",
-      "correctness": false,
-      "roundTrip": false,
-      "transpileMs": 60433
+      "aetTokens": 322,
+      "saving": "30.8",
+      "status": "PASS",
+      "correctness": true,
+      "roundTrip": true,
+      "transpileMs": 311
     },
     {
       "name": "b02_wordcount",
       "javaTokens": 357,
-      "aetTokens": 257,
-      "saving": "28.0",
-      "status": "ERROR",
-      "correctness": false,
-      "roundTrip": false,
-      "transpileMs": 72774
+      "aetTokens": 258,
+      "saving": "27.7",
+      "status": "PASS",
+      "correctness": true,
+      "roundTrip": true,
+      "transpileMs": 309
     },
     {
       "name": "b03_stack",
       "javaTokens": 432,
-      "aetTokens": 299,
-      "saving": "30.8",
-      "status": "ERROR",
-      "correctness": false,
+      "aetTokens": 295,
+      "saving": "31.7",
+      "status": "PASS",
+      "correctness": true,
       "roundTrip": false,
-      "transpileMs": 61239
+      "transpileMs": 313
     },
     {
       "name": "b04_celsius",
       "javaTokens": 1038,
-      "aetTokens": 641,
-      "saving": "38.2",
-      "status": "ERROR",
-      "correctness": false,
+      "aetTokens": 688,
+      "saving": "33.7",
+      "status": "PASS",
+      "correctness": true,
       "roundTrip": false,
-      "transpileMs": 42656
+      "transpileMs": 319
     },
     {
       "name": "b05_validate",
       "javaTokens": 1225,
-      "aetTokens": 873,
-      "saving": "28.7",
-      "status": "ERROR",
-      "correctness": false,
-      "roundTrip": false,
-      "transpileMs": 42070
+      "aetTokens": 927,
+      "saving": "24.3",
+      "status": "PASS",
+      "correctness": true,
+      "roundTrip": true,
+      "transpileMs": 322
     },
     {
       "name": "b06_kvstore",
       "javaTokens": 969,
-      "aetTokens": 754,
-      "saving": "22.2",
-      "status": "ERROR",
-      "correctness": false,
+      "aetTokens": 755,
+      "saving": "22.1",
+      "status": "PASS",
+      "correctness": true,
       "roundTrip": false,
-      "transpileMs": 37273
+      "transpileMs": 316
     },
     {
       "name": "b07_jsonlike",
       "javaTokens": 1320,
-      "aetTokens": 928,
-      "saving": "29.7",
-      "status": "ERROR",
-      "correctness": false,
+      "aetTokens": 978,
+      "saving": "25.9",
+      "status": "PASS",
+      "correctness": true,
       "roundTrip": false,
-      "transpileMs": 40965
+      "transpileMs": 324
     },
     {
       "name": "b08_csv",
       "javaTokens": 1448,
-      "aetTokens": 1105,
-      "saving": "23.7",
-      "status": "ERROR",
-      "correctness": false,
+      "aetTokens": 1097,
+      "saving": "24.2",
+      "status": "PASS",
+      "correctness": true,
       "roundTrip": false,
-      "transpileMs": 36793
+      "transpileMs": 324
     },
     {
       "name": "b09_calculator",
       "javaTokens": 1812,
-      "aetTokens": 1321,
-      "saving": "27.1",
-      "status": "ERROR",
-      "correctness": false,
+      "aetTokens": 1275,
+      "saving": "29.6",
+      "status": "PASS",
+      "correctness": true,
       "roundTrip": false,
-      "transpileMs": 39533
+      "transpileMs": 325
     },
     {
       "name": "b10_linkedlist",
       "javaTokens": 3098,
-      "aetTokens": 2144,
-      "saving": "30.8",
-      "status": "ERROR",
-      "correctness": false,
+      "aetTokens": 2304,
+      "saving": "25.6",
+      "status": "PASS",
+      "correctness": true,
       "roundTrip": false,
-      "transpileMs": 36998
+      "transpileMs": 343
     }
   ],
   "summary": {
-    "totalPass": 8,
+    "totalPass": 26,
     "totalFail": 0,
-    "totalError": 18,
+    "totalError": 0,
     "totalJava": 14640,
-    "totalAet": 10406,
-    "avgSaving": "28.9",
-    "rtPass": 8,
-    "avgSpeed": "52027"
+    "totalAet": 10517,
+    "avgSaving": "28.2",
+    "rtPass": 17,
+    "avgSpeed": "312"
+  },
+  "speedTest": {
+    "file": "b10_linkedlist.java",
+    "iterations": 10,
+    "avgMs": 329,
+    "minMs": 326,
+    "maxMs": 332
   }
 }

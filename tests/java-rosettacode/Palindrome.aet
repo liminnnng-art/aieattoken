@@ -1,1 +1,1 @@
-!v3;isPalindrome(s:string)->bool{left:=0;right:=ln(s)-1;for (left<right){if (s.charAt(left)!=s.charAt(right)){^false};left++;right--};^true};main(args:[]string){tests:=[]string{"racecar","hello","madam","world","level"};for _,s:=rng tests{pf("%s: %b%n",s,isPalindrome(s))}}
+!java-v1;isPalindrome(String s)->boolean{left:=0;right:=ln(s)-1;while left<right{if s.charAt(left)!=s.charAt(right){^false};left++;right--};true};main(){tests:=new String[]{"racecar","hello","madam","world","level"};for(s:tests){pf("%s: %b%n",s,isPalindrome(s))}}

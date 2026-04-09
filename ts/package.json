@@ -1,7 +1,7 @@
 {
   "name": "aieattoken",
   "version": "0.1.0",
-  "description": "Compress Go code into AI-native format — 39% fewer tokens, same compiled performance",
+  "description": "AI-native token compression for Go, Java, and Python. Reduces LLM token usage by 30-55%.",
   "main": "dist/cli.js",
   "bin": {
     "aet": "dist/cli.js"
@@ -17,28 +17,36 @@
     "dist/",
     "go-parser/main.go",
     "go-parser/go.mod",
+    "java-parser/ASTDumper.java",
+    "python-parser/ast_dumper.py",
     "stdlib-aliases.json",
+    "stdlib-aliases-java.json",
+    "stdlib-aliases-python.json",
+    "popular-aliases-python.json",
     "scripts/",
     "README.md"
   ],
   "keywords": [
     "ai",
     "llm",
+    "token-compression",
     "tokens",
     "go",
     "golang",
+    "java",
+    "python",
     "transpiler",
     "compression",
     "tokenizer",
     "gpt",
     "claude"
   ],
-  "author": "",
-  "license": "MIT",
+  "author": "Ez",
+  "license": "AGPL-3.0-only",
   "type": "module",
   "repository": {
     "type": "git",
-    "url": "https://github.com/user/aieattoken"
+    "url": ""
   },
   "engines": {
     "node": ">=18"

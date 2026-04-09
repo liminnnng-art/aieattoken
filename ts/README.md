@@ -1,6 +1,38 @@
-# aieattoken
+# aieattoken (AET)
 
-Compress Go source code into an AI-native format that uses **39% fewer LLM tokens** while compiling to identical Go binaries with zero performance overhead.
+Compress Go, Java, and Python source code into a compact, AI-native format that LLMs can read and write directly -- saving 30-55% of tokens while preserving full semantic fidelity.
+
+## Why?
+
+LLMs don't need `public static void main(String[] args)` to understand your code. They don't need `func`, `def`, curly braces around single-statement blocks, or redundant type annotations that the compiler already infers. AET strips the syntactic ceremony that exists for human readability and keeps only what matters for machine comprehension.
+
+The result: the same program, fully round-trippable back to compilable source, at a fraction of the token cost.
+
+## Compression Results
+
+Token counts measured with cl100k_base (GPT-4 / Claude tokenizer).
+
+### Go (.go -> .aet)
+
+| Benchmark | Files | Avg Savings |
+|-----------|-------|-------------|
+| RosettaCode algorithms | 17 | **40.9%** |
+| Error-heavy code | -- | **50-72%** per error pattern |
+
+### Java (.java -> .aetj)
+
+| Benchmark | Files | Avg Savings |
+|-----------|-------|-------------|
+| RosettaCode algorithms | 17 | **31.8%** |
+| Real-world utilities | 10 | **34.4%** |
+| Boilerplate-heavy (DTOs, VOs) | 5 | **44-56%** |
+| Spring Boot controllers | 2 | **40%+** |
+
+### Python (.py -> .aetp)
+
+| Benchmark | Files | Avg Savings |
+|-----------|-------|-------------|
+| Real-world scripts | 5 | **38.2%** |
 
 ## Install
 
@@ -8,35 +40,79 @@ Compress Go source code into an AI-native format that uses **39% fewer LLM token
 npm install -g aieattoken
 ```
 
-Requires [Node.js](https://nodejs.org/) >= 18. For `aet convert` (Go to AET), you also need [Go](https://go.dev/dl/) installed.
+**Prerequisites:**
 
-## Quick Start
+- Node.js >= 18
+- Go toolchain (for `aet convert *.go` and `aet build`)
+- JDK 17+ (for `aet convert *.java`)
+- Python 3.10+ (for `aet convert *.py`)
+
+The `compile` command (AET -> source) requires only Node.js.
+
+## Usage
+
+### Convert source to AET
 
 ```bash
-# See how many tokens you'd save
-aet stats myserver.go
+# Go -> AET
+aet convert server.go
+# Output: server.aet (tokens: 1204 -> 712, 40.9% saved)
 
-# Convert Go to compressed AET format
-aet convert myserver.go
+# Java -> AETJ
+aet convert UserService.java
+# Output: UserService.aetj
 
-# Build AET back to a Go binary
-aet build myserver.aet
+# Python -> AETP
+aet convert app.py
+# Output: app.aetp
+```
 
-# Watch a directory for changes
+### Compile AET back to source
+
+```bash
+# AET -> Go
+aet compile server.aet
+
+# AETJ -> Java
+aet compile UserService.aetj
+
+# AETP -> Python
+aet compile app.aetp
+
+# AETP -> Python with type hints
+aet compile app.aetp --typed
+
+# Write to file
+aet compile server.aet -o server.go
+```
+
+### Show token savings
+
+```bash
+aet stats server.go
+aet stats UserService.java
+aet stats app.py
+```
+
+### Build (Go only)
+
+```bash
+# AET -> Go -> compiled binary
+aet build server.aet
+aet build server.aet -o myapp
+```
+
+### Watch mode (Go)
+
+```bash
 aet watch ./src
 ```
 
-## What It Does
+### AST diff
 
-Aieattoken is an **LLM-optimized serialization format for Go ASTs**. It compresses Go source code by:
-
-- Eliminating `package`, `import`, `func` boilerplate (auto-inferred)
-- Replacing `if err != nil { return err }` with `?` (72% savings per pattern)
-- Using single-token stdlib aliases (`pl` = `fmt.Println`, `Ef` = `fmt.Errorf`)
-- Removing whitespace, newlines, type annotations where inferable
-- Preserving `{ } [ ] ( )` brackets for AI scope comprehension
-
-The transpiled Go code is **identical** to hand-written Go — same compiled binary, same performance.
+```bash
+aet diff v1.aet v2.aet
+```
 
 ## Example
 
@@ -66,122 +142,15 @@ func main() {
 fibonacci(n){if n<=1{n};fibonacci(n-1)+fibonacci(n-2)};main(){for i:=0..10{pf("%d ",fibonacci(i))};pl()}
 ```
 
-## Error-Heavy Code (Where AET Shines)
-
-```go
-// Go: 50 tokens for 3 error checks
-a, err := step1()
-if err != nil { return err }
-b, err := step2(a)
-if err != nil { return err }
-c, err := step3(b)
-if err != nil { return err }
-```
-
-```
-// AET: 19 tokens (62% saved)
-a:=step1()?;b:=step2(a)?;c:=step3(b)?
-```
-
-## Test Results
-
-Tested on 17 RosettaCode algorithms + 10 real-world Go programs:
-
-| Metric | Result |
-|--------|--------|
-| Token savings (algorithms) | **39.4%** |
-| Token savings (error-heavy) | **50-72%** per error pattern |
-| Round-trip accuracy | **100%** (17/17 AST-identical) |
-| Performance overhead | **0%** (same compiled Go) |
-| Transpile speed | **8ms** per 200 functions |
-
-### Comparison with Other Languages (cl100k_base tokens)
-
-| Language | Total Tokens (17 tasks) | vs Go |
-|----------|------------------------|-------|
-| Go | 2,220 | baseline |
-| J | 1,315 | -40.8% |
-| **AET** | **1,346** | **-39.4%** |
-| Python | 1,600 | -27.9% |
-| Clojure | 1,674 | -24.6% |
-
-AET approaches J-level token density while compiling to Go performance.
-
-## Commands
-
-### `aet convert <file.go>`
-
-Convert a Go file to AET format. Output saved as `.aet` alongside the Go file.
-
-```bash
-aet convert server.go           # Creates server.aet
-aet convert server.go -o out.aet  # Custom output path
-```
-
-### `aet build <file.aet>`
-
-Convert AET to Go and compile to a binary.
-
-```bash
-aet build server.aet           # Creates server.exe / server
-aet build server.aet -o myapp  # Custom binary name
-```
-
-### `aet stats <file.go>`
-
-Display token savings analysis for a Go file.
-
-```bash
-$ aet stats fibonacci.go
-
-  File: fibonacci.go
-  Go tokens:  72
-  AET tokens: 43
-  Saved:      29 tokens (40.3%)
-
-  Go:  [########################################] 72
-  AET: [########################                ] 43
-```
-
-### `aet watch <dir>`
-
-Watch a directory for `.go` file changes, automatically converting to `.aet`.
-
-```bash
-aet watch ./src
-```
-
-### `aet compile <file.aet>`
-
-Convert AET to Go source code (without compiling).
-
-```bash
-aet compile server.aet          # Print Go to stdout
-aet compile server.aet -o out.go  # Write to file
-```
-
-## AET Syntax Reference
-
-| Feature | Go | AET |
-|---------|-----|-----|
-| Function | `func add(a, b int) int { return a + b }` | `add(a,b){a+b}` |
-| Error propagation | `val, err := fn(); if err != nil { return err }` | `val:=fn()?` |
-| Struct | `type User struct { Name string }` | `@User{Name:string}` |
-| Method | `func (u *User) Greet() string { ... }` | `User.Greet(){...}` |
-| Return | `return x` | `^x` (or implicit last expr) |
-| Println | `fmt.Println(x)` | `pl(x)` |
-| Sprintf | `fmt.Sprintf(...)` | `sf(...)` |
-| Range loop | `for i := 0; i < n; i++ { ... }` | `for i:=0..n{...}` |
-
 ## How It Works
 
-```
-Go source → [go/ast parser] → JSON AST → [transformer] → IR → [emitter] → AET
-AET source → [Chevrotain parser] → CST → [transformer] → IR → [emitter] → Go source
-```
+1. **Parse** source code into a language-specific AST (using Go's `go/parser`, Java's `com.sun.source`, or Python's `ast` module)
+2. **Lower** the AST into a shared IR (Intermediate Representation)
+3. **Compress** the IR into AET format: strip redundant keywords, apply stdlib aliases, use shorthand notations
+4. **Reverse**: parse AET back to IR, emit valid source code in the target language
 
-Three-layer architecture: AET (compressed) <-> IR (typed AST) <-> Go (compilable)
+The entire pipeline is deterministic and round-trippable.
 
 ## License
 
-MIT
+AGPL-3.0-only

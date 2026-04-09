@@ -1,1 +1,1 @@
-!v3;ackermann(m:int,n:int)->int{if (m==0){^n+1};if (n==0){^ackermann(m-1,1)};^ackermann(m-1,ackermann(m,n-1))};main(args:[]string){for m:=0;m<=3;m++{for n:=0;n<=4;n++{pf("A(%d,%d) = %d%n",m,n,ackermann(m,n))}}}
+!java-v1;ackermann(int m,int n)->int{if m==0{^n+1};if n==0{^ackermann(m-1,1)};ackermann(m-1,ackermann(m,n-1))};main(){for(m:=0;m<=3;m++){for(n:=0;n<=4;n++){pf("A(%d,%d) = %d%n",m,n,ackermann(m,n))}}}
