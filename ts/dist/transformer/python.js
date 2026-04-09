@@ -1401,9 +1401,16 @@ function applyTrailer(base, trailer) {
             return applySubscript(base, sl);
         return base;
     }
-    // Dot access: .ident
+    // Dot access: .ident (Ident may be inside attrName child node)
     if (tok(trailer, "Dot") !== undefined) {
-        const sel = tok(trailer, "Ident") || "";
+        let sel = tok(trailer, "Ident") || "";
+        if (!sel) {
+            // The parser wraps the attribute name in an attrName subrule
+            const attrNameNode = child(trailer, "attrName");
+            if (attrNameNode) {
+                sel = tok(attrNameNode, "Ident") || tok(attrNameNode, "Match") || tok(attrNameNode, "Case") || tok(attrNameNode, "Slots") || "";
+            }
+        }
         return { kind: "SelectorExpr", x: base, sel };
     }
     return base;

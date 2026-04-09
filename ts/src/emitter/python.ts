@@ -184,6 +184,24 @@ class ImportTracker {
     }
 }
 
+// ─── Known Python modules (for auto-import detection) ────────────────────────
+
+const KNOWN_MODULES = new Set([
+    "abc", "argparse", "asyncio", "bisect", "collections", "contextlib",
+    "copy", "csv", "dataclasses", "datetime", "decimal", "enum",
+    "functools", "glob", "hashlib", "heapq", "http", "inspect",
+    "io", "itertools", "json", "logging", "math", "operator",
+    "os", "pathlib", "pickle", "pprint", "random",
+    "re", "shutil", "signal", "socket", "sqlite3", "string",
+    "struct", "subprocess", "sys", "tempfile", "textwrap",
+    "threading", "time", "typing", "unittest", "urllib",
+    "uuid", "warnings", "weakref", "xml", "zipfile",
+    // Common third-party
+    "numpy", "np", "pandas", "pd", "requests", "flask", "django",
+    "sqlalchemy", "celery", "redis", "boto3", "pytest",
+    "pydantic", "fastapi", "httpx", "aiohttp",
+]);
+
 // ─── Module-level state reset per emit call ───────────────────────────────────
 
 let importTracker: ImportTracker;
@@ -1176,6 +1194,15 @@ function emitIdent(expr: IR.IRIdent): string {
                 importTracker.trackPkg(popAlias.pkg);
                 return popAlias.python;
             }
+
+            // Auto-import for dotted names (e.g., from f-string expressions like "math.factorial(i)")
+            if (expr.name.includes(".")) {
+                const topModule = expr.name.split(".")[0];
+                if (KNOWN_MODULES.has(topModule)) {
+                    importTracker.addBare(topModule);
+                }
+            }
+
             return expr.name;
         }
     }
@@ -1230,8 +1257,31 @@ function emitCompositeLit(expr: IR.IRCompositeLit): string {
         return `[${elts}]`;
     }
 
-    // Struct literal -> constructor call
+    // Ident type: check if it's a Python built-in collection type
     if (typeExpr.kind === "Ident") {
+        const typeName = (typeExpr as IR.IRIdent).name;
+
+        // list literal -> [...] syntax
+        if (typeName === "list") {
+            const elts = expr.elts.map(emitExpr).join(", ");
+            return `[${elts}]`;
+        }
+
+        // set literal -> {...} syntax
+        if (typeName === "set") {
+            if (expr.elts.length === 0) return "set()";
+            const elts = expr.elts.map(emitExpr).join(", ");
+            return `{${elts}}`;
+        }
+
+        // tuple literal -> (...) syntax
+        if (typeName === "tuple") {
+            const elts = expr.elts.map(emitExpr).join(", ");
+            if (expr.elts.length === 1) return `(${elts},)`;
+            return `(${elts})`;
+        }
+
+        // Struct literal -> constructor call
         const args = expr.elts.map(e => {
             if (e.kind === "KeyValueExpr") {
                 // Named args: key=value
@@ -1239,7 +1289,7 @@ function emitCompositeLit(expr: IR.IRCompositeLit): string {
             }
             return emitExpr(e);
         }).join(", ");
-        return `${(typeExpr as IR.IRIdent).name}(${args})`;
+        return `${typeName}(${args})`;
     }
 
     // Fallback
@@ -1371,7 +1421,9 @@ function emitCallExpr(expr: IR.IRCallExpr): string {
             case "println":
                 return `print(${args})`;
             case "print":
-                return `print(${args}, end="")`;
+                // In Python, print() adds a newline by default.
+                // Go's print (no-newline) is handled via fmt.Print in mapStdlibCall.
+                return `print(${args})`;
             case "string":
                 if (expr.args.length === 1) return `str(${args})`;
                 break;
@@ -1584,6 +1636,15 @@ function emitSelectorExpr(expr: IR.IRSelectorExpr): string {
     // Self attribute restoration: if inside a class body and the selector
     // target is omitted or the parent is effectively "self"
     const x = emitExpr(expr.x);
+
+    // Auto-import detection: if the receiver is a known module name, add the import
+    if (expr.x.kind === "Ident") {
+        const modName = (expr.x as IR.IRIdent).name;
+        if (KNOWN_MODULES.has(modName)) {
+            importTracker.addBare(modName);
+        }
+    }
+
     return `${x}.${expr.sel}`;
 }
 

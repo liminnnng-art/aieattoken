@@ -1,0 +1,452 @@
+{
+  "groupA": [
+    {
+      "file": "ackermann.py",
+      "pyTokens": 99,
+      "aetpTokens": 77,
+      "savePct": "22.2",
+      "parseOk": true,
+      "stdoutMatch": true
+    },
+    {
+      "file": "binsearch.py",
+      "pyTokens": 170,
+      "aetpTokens": 126,
+      "savePct": "25.9",
+      "parseOk": true,
+      "stdoutMatch": true
+    },
+    {
+      "file": "bubblesort.py",
+      "pyTokens": 116,
+      "aetpTokens": 97,
+      "savePct": "16.4",
+      "parseOk": true,
+      "stdoutMatch": true
+    },
+    {
+      "file": "caesar.py",
+      "pyTokens": 186,
+      "aetpTokens": 166,
+      "savePct": "10.8",
+      "parseOk": true,
+      "stdoutMatch": true
+    },
+    {
+      "file": "doors100.py",
+      "pyTokens": 81,
+      "aetpTokens": 71,
+      "savePct": "12.3",
+      "parseOk": true,
+      "stdoutMatch": false,
+      "originalOut": "Open doors: 1 4 9 16 25 36 49 64 81 100\n",
+      "emittedOut": "ERROR: Command failed: \"C:/Users/user/AppData/Local/Programs/Python/Python314/python.exe\" \"D:\\AIEATT"
+    },
+    {
+      "file": "factorial.py",
+      "pyTokens": 35,
+      "aetpTokens": 26,
+      "savePct": "25.7",
+      "parseOk": true,
+      "stdoutMatch": true
+    },
+    {
+      "file": "fibonacci.py",
+      "pyTokens": 54,
+      "aetpTokens": 45,
+      "savePct": "16.7",
+      "parseOk": true,
+      "stdoutMatch": true
+    },
+    {
+      "file": "fizzbuzz.py",
+      "pyTokens": 73,
+      "aetpTokens": 53,
+      "savePct": "27.4",
+      "parseOk": true,
+      "stdoutMatch": true
+    },
+    {
+      "file": "gcd.py",
+      "pyTokens": 45,
+      "aetpTokens": 32,
+      "savePct": "28.9",
+      "parseOk": true,
+      "stdoutMatch": true
+    },
+    {
+      "file": "hanoi.py",
+      "pyTokens": 106,
+      "aetpTokens": 88,
+      "savePct": "17.0",
+      "parseOk": true,
+      "stdoutMatch": true
+    },
+    {
+      "file": "luhn.py",
+      "pyTokens": 117,
+      "aetpTokens": 95,
+      "savePct": "18.8",
+      "parseOk": true,
+      "stdoutMatch": true
+    },
+    {
+      "file": "matrix.py",
+      "pyTokens": 112,
+      "aetpTokens": 95,
+      "savePct": "15.2",
+      "parseOk": true,
+      "stdoutMatch": true
+    },
+    {
+      "file": "palindrome.py",
+      "pyTokens": 49,
+      "aetpTokens": 45,
+      "savePct": "8.2",
+      "parseOk": true,
+      "stdoutMatch": false,
+      "originalOut": "racecar: True\nhello: False\nlevel: True\nmadam: True\n",
+      "emittedOut": "racecar: False\nhello: False\nlevel: False\nmadam: False\n"
+    },
+    {
+      "file": "reverse.py",
+      "pyTokens": 32,
+      "aetpTokens": 32,
+      "savePct": "0.0",
+      "parseOk": true,
+      "stdoutMatch": true
+    },
+    {
+      "file": "roman.py",
+      "pyTokens": 163,
+      "aetpTokens": 122,
+      "savePct": "25.2",
+      "parseOk": true,
+      "stdoutMatch": true
+    },
+    {
+      "file": "sieve.py",
+      "pyTokens": 130,
+      "aetpTokens": 98,
+      "savePct": "24.6",
+      "parseOk": true,
+      "stdoutMatch": false,
+      "originalOut": "2 3 5 7 11 13 17 19 23 29 31 37 41 43 47 53 59 61 67 71 73 79 83 89 97\n",
+      "emittedOut": "ERROR: Command failed: \"C:/Users/user/AppData/Local/Programs/Python/Python314/python.exe\" \"D:\\AIEATT"
+    },
+    {
+      "file": "tokenize.py",
+      "pyTokens": 32,
+      "aetpTokens": 26,
+      "savePct": "18.8",
+      "parseOk": true,
+      "stdoutMatch": true
+    },
+    {
+      "file": "accumulator.py",
+      "pyTokens": 68,
+      "aetpTokens": 50,
+      "savePct": "26.5",
+      "parseOk": true,
+      "stdoutMatch": false,
+      "originalOut": "15\n18\n30\n",
+      "emittedOut": "ERROR: Command failed: \"C:/Users/user/AppData/Local/Programs/Python/Python314/python.exe\" \"D:\\AIEATT"
+    },
+    {
+      "file": "balanced_brackets.py",
+      "pyTokens": 101,
+      "aetpTokens": 92,
+      "savePct": "8.9",
+      "parseOk": true,
+      "stdoutMatch": false,
+      "originalOut": "''           -> True\n'[]'         -> True\n'[][]'       -> True\n'[[][]]'     -> True\n']['         -> ",
+      "emittedOut": "ERROR: Command failed: \"C:/Users/user/AppData/Local/Programs/Python/Python314/python.exe\" \"D:\\AIEATT"
+    },
+    {
+      "file": "counting_sort.py",
+      "pyTokens": 104,
+      "aetpTokens": 97,
+      "savePct": "6.7",
+      "parseOk": true,
+      "stdoutMatch": false,
+      "originalOut": "Before: [4, 2, 2, 8, 3, 3, 1, 7, 5, 5, 4]\nAfter:  [1, 2, 2, 3, 3, 4, 4, 5, 5, 7, 8]\n",
+      "emittedOut": "ERROR: Command failed: \"C:/Users/user/AppData/Local/Programs/Python/Python314/python.exe\" \"D:\\AIEATT"
+    },
+    {
+      "file": "flatten.py",
+      "pyTokens": 49,
+      "aetpTokens": 48,
+      "savePct": "2.0",
+      "parseOk": true,
+      "stdoutMatch": true
+    },
+    {
+      "file": "hailstone.py",
+      "pyTokens": 152,
+      "aetpTokens": 143,
+      "savePct": "5.9",
+      "parseOk": true,
+      "stdoutMatch": false,
+      "originalOut": "Hailstone(27): length=112\nFirst 4: [27, 82, 41, 124]\nLast 4:  [8, 4, 2, 1]\nLongest under 100000: 770",
+      "emittedOut": "ERROR: Command failed: \"C:/Users/user/AppData/Local/Programs/Python/Python314/python.exe\" \"D:\\AIEATT"
+    },
+    {
+      "file": "happy_numbers.py",
+      "pyTokens": 68,
+      "aetpTokens": 64,
+      "savePct": "5.9",
+      "parseOk": true,
+      "stdoutMatch": true
+    },
+    {
+      "file": "levenshtein.py",
+      "pyTokens": 238,
+      "aetpTokens": 206,
+      "savePct": "13.4",
+      "parseOk": true,
+      "stdoutMatch": false,
+      "originalOut": "3\n3\n8\n",
+      "emittedOut": "ERROR: Command failed: \"C:/Users/user/AppData/Local/Programs/Python/Python314/python.exe\" \"D:\\AIEATT"
+    },
+    {
+      "file": "matrix_transpose.py",
+      "pyTokens": 67,
+      "aetpTokens": 73,
+      "savePct": "-9.0",
+      "parseOk": true,
+      "stdoutMatch": true
+    },
+    {
+      "file": "nqueens.py",
+      "pyTokens": 139,
+      "aetpTokens": 134,
+      "savePct": "3.6",
+      "parseOk": true,
+      "stdoutMatch": true
+    },
+    {
+      "file": "perfect_numbers.py",
+      "pyTokens": 55,
+      "aetpTokens": 53,
+      "savePct": "3.6",
+      "parseOk": true,
+      "stdoutMatch": true
+    },
+    {
+      "file": "power_set.py",
+      "pyTokens": 47,
+      "aetpTokens": 42,
+      "savePct": "10.6",
+      "parseOk": true,
+      "stdoutMatch": false,
+      "originalOut": "[(), (1,), (2,), (3,), (1, 2), (1, 3), (2, 3), (1, 2, 3)]\n",
+      "emittedOut": "ERROR: Command failed: \"C:/Users/user/AppData/Local/Programs/Python/Python314/python.exe\" \"D:\\AIEATT"
+    },
+    {
+      "file": "quicksort.py",
+      "pyTokens": 100,
+      "aetpTokens": 96,
+      "savePct": "4.0",
+      "parseOk": true,
+      "stdoutMatch": true
+    },
+    {
+      "file": "rle.py",
+      "pyTokens": 188,
+      "aetpTokens": 172,
+      "savePct": "8.5",
+      "parseOk": true,
+      "stdoutMatch": false,
+      "originalOut": "Original: WWWWWWWWWWWWBWWWWWWWWWWWWBBBWWWWWWWWWWWWWWWWWWWWWWWWBWWWWWWWWWWWWWW\nEncoded:  12W1B12W3B24",
+      "emittedOut": "ERROR: Command failed: \"C:/Users/user/AppData/Local/Programs/Python/Python314/python.exe\" \"D:\\AIEATT"
+    },
+    {
+      "file": "rot13.py",
+      "pyTokens": 109,
+      "aetpTokens": 103,
+      "savePct": "5.5",
+      "parseOk": true,
+      "stdoutMatch": false,
+      "originalOut": "Original: The Quick Brown Fox Jumps Over The Lazy Dog\nEncoded:  Gur Dhvpx Oebja Sbk Whzcf Bire Gur Y",
+      "emittedOut": "Original: The Quick Brown Fox Jumps Over The Lazy Dog\nEncoded:  Tur Quvpx Orown Sox Wuzps Ovrr Tur Y"
+    },
+    {
+      "file": "topological_sort.py",
+      "pyTokens": 149,
+      "aetpTokens": 122,
+      "savePct": "18.1",
+      "parseOk": true,
+      "stdoutMatch": true
+    }
+  ],
+  "groupB": [
+    {
+      "file": "async_fetcher.py",
+      "pyTokens": 1378,
+      "aetpTokens": 865,
+      "savePct": "37.2",
+      "parseOk": true,
+      "roundTripOk": false
+    },
+    {
+      "file": "calculator.py",
+      "pyTokens": 674,
+      "aetpTokens": 409,
+      "savePct": "39.3",
+      "parseOk": true,
+      "roundTripOk": false
+    },
+    {
+      "file": "class_hierarchy.py",
+      "pyTokens": 1530,
+      "aetpTokens": 934,
+      "savePct": "39.0",
+      "parseOk": true,
+      "roundTripOk": false
+    },
+    {
+      "file": "cli_tool.py",
+      "pyTokens": 1916,
+      "aetpTokens": 1385,
+      "savePct": "27.7",
+      "parseOk": true,
+      "roundTripOk": true
+    },
+    {
+      "file": "csv_reader.py",
+      "pyTokens": 662,
+      "aetpTokens": 436,
+      "savePct": "34.1",
+      "parseOk": true,
+      "roundTripOk": true
+    },
+    {
+      "file": "data_processor.py",
+      "pyTokens": 1681,
+      "aetpTokens": 1095,
+      "savePct": "34.9",
+      "parseOk": true,
+      "roundTripOk": true
+    },
+    {
+      "file": "fizzbuzz.py",
+      "pyTokens": 388,
+      "aetpTokens": 210,
+      "savePct": "45.9",
+      "parseOk": true,
+      "roundTripOk": true
+    },
+    {
+      "file": "flask_api.py",
+      "pyTokens": 1257,
+      "aetpTokens": 818,
+      "savePct": "34.9",
+      "parseOk": true,
+      "roundTripOk": true
+    },
+    {
+      "file": "orm_models.py",
+      "pyTokens": 3789,
+      "aetpTokens": 2197,
+      "savePct": "42.0",
+      "parseOk": true,
+      "roundTripOk": false
+    },
+    {
+      "file": "task_scheduler.py",
+      "pyTokens": 4091,
+      "aetpTokens": 2423,
+      "savePct": "40.8",
+      "parseOk": true,
+      "roundTripOk": false
+    }
+  ],
+  "roundTrip": [
+    {
+      "file": "ackermann.py",
+      "aetp1Tokens": 77,
+      "aetp2Tokens": 77,
+      "diff": 0,
+      "pctDiff": "0.0",
+      "status": "IDENTICAL"
+    },
+    {
+      "file": "binsearch.py",
+      "aetp1Tokens": 126,
+      "aetp2Tokens": 126,
+      "diff": 0,
+      "pctDiff": "0.0",
+      "status": "IDENTICAL"
+    },
+    {
+      "file": "bubblesort.py",
+      "aetp1Tokens": 97,
+      "aetp2Tokens": 97,
+      "diff": 0,
+      "pctDiff": "0.0",
+      "status": "IDENTICAL"
+    },
+    {
+      "file": "caesar.py",
+      "aetp1Tokens": 166,
+      "aetp2Tokens": 166,
+      "diff": 0,
+      "pctDiff": "0.0",
+      "status": "IDENTICAL"
+    },
+    {
+      "file": "doors100.py",
+      "aetp1Tokens": 71,
+      "aetp2Tokens": 71,
+      "diff": 0,
+      "pctDiff": "0.0",
+      "status": "IDENTICAL"
+    },
+    {
+      "file": "factorial.py",
+      "aetp1Tokens": 26,
+      "aetp2Tokens": 26,
+      "diff": 0,
+      "pctDiff": "0.0",
+      "status": "IDENTICAL"
+    },
+    {
+      "file": "fibonacci.py",
+      "aetp1Tokens": 45,
+      "aetp2Tokens": 45,
+      "diff": 0,
+      "pctDiff": "0.0",
+      "status": "IDENTICAL"
+    },
+    {
+      "file": "fizzbuzz.py",
+      "aetp1Tokens": 53,
+      "aetp2Tokens": 53,
+      "diff": 0,
+      "pctDiff": "0.0",
+      "status": "IDENTICAL"
+    },
+    {
+      "file": "gcd.py",
+      "aetp1Tokens": 32,
+      "aetp2Tokens": 32,
+      "diff": 0,
+      "pctDiff": "0.0",
+      "status": "IDENTICAL"
+    },
+    {
+      "file": "hanoi.py",
+      "aetp1Tokens": 88,
+      "aetp2Tokens": 88,
+      "diff": 0,
+      "pctDiff": "0.0",
+      "status": "IDENTICAL"
+    }
+  ],
+  "speed": {
+    "totalLines": 595,
+    "totalTimeMs": "487.8",
+    "linesPerSec": "1220",
+    "iterations": 10
+  }
+}
