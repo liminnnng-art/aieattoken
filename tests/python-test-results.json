@@ -38,9 +38,7 @@
       "aetpTokens": 71,
       "savePct": "12.3",
       "parseOk": true,
-      "stdoutMatch": false,
-      "originalOut": "Open doors: 1 4 9 16 25 36 49 64 81 100\n",
-      "emittedOut": "ERROR: Command failed: \"C:/Users/user/AppData/Local/Programs/Python/Python314/python.exe\" \"D:\\AIEATT"
+      "stdoutMatch": true
     },
     {
       "file": "factorial.py",
@@ -158,9 +156,7 @@
       "aetpTokens": 91,
       "savePct": "9.9",
       "parseOk": true,
-      "stdoutMatch": false,
-      "originalOut": "''           -> True\n'[]'         -> True\n'[][]'       -> True\n'[[][]]'     -> True\n']['         -> ",
-      "emittedOut": "ERROR: Command failed: \"C:/Users/user/AppData/Local/Programs/Python/Python314/python.exe\" \"D:\\AIEATT"
+      "stdoutMatch": true
     },
     {
       "file": "counting_sort.py",
@@ -168,9 +164,7 @@
       "aetpTokens": 97,
       "savePct": "6.7",
       "parseOk": true,
-      "stdoutMatch": false,
-      "originalOut": "Before: [4, 2, 2, 8, 3, 3, 1, 7, 5, 5, 4]\nAfter:  [1, 2, 2, 3, 3, 4, 4, 5, 5, 7, 8]\n",
-      "emittedOut": "ERROR: Command failed: \"C:/Users/user/AppData/Local/Programs/Python/Python314/python.exe\" \"D:\\AIEATT"
+      "stdoutMatch": true
     },
     {
       "file": "flatten.py",
@@ -186,9 +180,7 @@
       "aetpTokens": 142,
       "savePct": "6.6",
       "parseOk": true,
-      "stdoutMatch": false,
-      "originalOut": "Hailstone(27): length=112\nFirst 4: [27, 82, 41, 124]\nLast 4:  [8, 4, 2, 1]\nLongest under 100000: 770",
-      "emittedOut": "ERROR: Command failed: \"C:/Users/user/AppData/Local/Programs/Python/Python314/python.exe\" \"D:\\AIEATT"
+      "stdoutMatch": true
     },
     {
       "file": "happy_numbers.py",
@@ -204,9 +196,7 @@
       "aetpTokens": 205,
       "savePct": "13.9",
       "parseOk": true,
-      "stdoutMatch": false,
-      "originalOut": "3\n3\n8\n",
-      "emittedOut": "ERROR: Command failed: \"C:/Users/user/AppData/Local/Programs/Python/Python314/python.exe\" \"D:\\AIEATT"
+      "stdoutMatch": true
     },
     {
       "file": "matrix_transpose.py",
@@ -273,8 +263,8 @@
     {
       "file": "topological_sort.py",
       "pyTokens": 149,
-      "aetpTokens": 121,
-      "savePct": "18.8",
+      "aetpTokens": 120,
+      "savePct": "19.5",
       "parseOk": true,
       "stdoutMatch": true
     }
@@ -283,10 +273,10 @@
     {
       "file": "async_fetcher.py",
       "pyTokens": 1378,
-      "aetpTokens": 863,
-      "savePct": "37.4",
+      "aetpTokens": 834,
+      "savePct": "39.5",
       "parseOk": true,
-      "roundTripOk": false
+      "roundTripOk": true
     },
     {
       "file": "calculator.py",
@@ -294,37 +284,37 @@
       "aetpTokens": 408,
       "savePct": "39.5",
       "parseOk": true,
-      "roundTripOk": false
+      "roundTripOk": true
     },
     {
       "file": "class_hierarchy.py",
       "pyTokens": 1530,
-      "aetpTokens": 931,
-      "savePct": "39.2",
+      "aetpTokens": 905,
+      "savePct": "40.8",
       "parseOk": true,
-      "roundTripOk": false
+      "roundTripOk": true
     },
     {
       "file": "cli_tool.py",
       "pyTokens": 1916,
-      "aetpTokens": 1380,
-      "savePct": "28.0",
+      "aetpTokens": 1373,
+      "savePct": "28.3",
       "parseOk": true,
       "roundTripOk": true
     },
     {
       "file": "csv_reader.py",
       "pyTokens": 662,
-      "aetpTokens": 435,
-      "savePct": "34.3",
+      "aetpTokens": 427,
+      "savePct": "35.5",
       "parseOk": true,
       "roundTripOk": true
     },
     {
       "file": "data_processor.py",
       "pyTokens": 1681,
-      "aetpTokens": 1093,
-      "savePct": "35.0",
+      "aetpTokens": 1091,
+      "savePct": "35.1",
       "parseOk": true,
       "roundTripOk": true
     },
@@ -339,26 +329,26 @@
     {
       "file": "flask_api.py",
       "pyTokens": 1257,
-      "aetpTokens": 811,
-      "savePct": "35.5",
+      "aetpTokens": 797,
+      "savePct": "36.6",
       "parseOk": true,
       "roundTripOk": true
     },
     {
       "file": "orm_models.py",
       "pyTokens": 3789,
-      "aetpTokens": 2189,
-      "savePct": "42.2",
+      "aetpTokens": 2175,
+      "savePct": "42.6",
       "parseOk": true,
-      "roundTripOk": false
+      "roundTripOk": true
     },
     {
       "file": "task_scheduler.py",
       "pyTokens": 4091,
-      "aetpTokens": 2418,
-      "savePct": "40.9",
+      "aetpTokens": 2377,
+      "savePct": "41.9",
       "parseOk": true,
-      "roundTripOk": false
+      "roundTripOk": true
     }
   ],
   "roundTrip": [
@@ -445,8 +435,8 @@
   ],
   "speed": {
     "totalLines": 595,
-    "totalTimeMs": "519.4",
-    "linesPerSec": "1146",
+    "totalTimeMs": "584.3",
+    "linesPerSec": "1018",
     "iterations": 10
   }
 }

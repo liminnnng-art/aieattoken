@@ -1,8 +1,8 @@
 {
-  "_version": "0.1",
+  "_version": "0.2",
   "_tokenizer": "cl100k_base",
-  "_description": "Python stdlib alias mapping for AET-Python. Every alias is a single cl100k_base token.",
-  "_count": 33,
+  "_description": "Python stdlib alias mapping for AET-Python. Every alias is a single cl100k_base token and saves >=1 token vs original call.",
+  "_count": 55,
   "aliases": {
     "jd": {
       "python": "json.dumps",
@@ -90,12 +90,44 @@
       "python": "asyncio.sleep",
       "pkg": "asyncio"
     },
+    "asm": {
+      "python": "asyncio.Semaphore",
+      "pkg": "asyncio"
+    },
+    "asc": {
+      "python": "asyncio.create_task",
+      "pkg": "asyncio"
+    },
+    "ase": {
+      "python": "asyncio.Event",
+      "pkg": "asyncio"
+    },
+    "alk": {
+      "python": "asyncio.Lock",
+      "pkg": "asyncio"
+    },
+    "aq": {
+      "python": "asyncio.Queue",
+      "pkg": "asyncio"
+    },
+    "ate": {
+      "python": "asyncio.TimeoutError",
+      "pkg": "asyncio"
+    },
     "sa": {
       "python": "sys.argv",
       "pkg": "sys"
     },
     "sx": {
       "python": "sys.exit",
+      "pkg": "sys"
+    },
+    "se": {
+      "python": "sys.stderr",
+      "pkg": "sys"
+    },
+    "so": {
+      "python": "sys.stdout",
       "pkg": "sys"
     },
     "rm": {
@@ -118,15 +150,75 @@
       "python": "itertools.groupby",
       "pkg": "itertools"
     },
+    "isl": {
+      "python": "itertools.islice",
+      "pkg": "itertools"
+    },
     "lc": {
       "python": "lru_cache",
       "pkg": "functools",
       "fromImport": "from functools import lru_cache"
     },
+    "fw": {
+      "python": "functools.wraps",
+      "pkg": "functools"
+    },
+    "fr": {
+      "python": "functools.reduce",
+      "pkg": "functools"
+    },
+    "fp": {
+      "python": "functools.partial",
+      "pkg": "functools"
+    },
     "fi": {
       "python": "field",
       "pkg": "dataclasses",
       "fromImport": "from dataclasses import field"
+    },
+    "tt": {
+      "python": "time.time",
+      "pkg": "time"
+    },
+    "tm": {
+      "python": "time.monotonic",
+      "pkg": "time"
+    },
+    "mpi": {
+      "python": "math.pi",
+      "pkg": "math"
+    },
+    "mh": {
+      "python": "math.hypot",
+      "pkg": "math"
+    },
+    "mic": {
+      "python": "math.isclose",
+      "pkg": "math"
+    },
+    "rr": {
+      "python": "random.random",
+      "pkg": "random"
+    },
+    "ru": {
+      "python": "random.uniform",
+      "pkg": "random"
+    },
+    "rch": {
+      "python": "random.choice",
+      "pkg": "random"
+    },
+    "hp": {
+      "python": "heapq.heappush",
+      "pkg": "heapq"
+    },
+    "DR": {
+      "python": "csv.DictReader",
+      "pkg": "csv"
+    },
+    "DW": {
+      "python": "csv.DictWriter",
+      "pkg": "csv"
     },
     "isi": {
       "python": "isinstance",

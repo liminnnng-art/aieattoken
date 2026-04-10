@@ -11,16 +11,46 @@ import * as IR from "../ir.js";
 // Reverse alias map: "json.dumps" → "jd"
 // ---------------------------------------------------------------------------
 let pythonReverseAliasMap: Record<string, string> = Object.create(null);
+let aliasMapLoaded = false;
 
 export function loadPythonReverseAliases(path?: string): void {
+  // Try multiple candidate paths so callers from any cwd find the JSON.
+  const candidates: string[] = [];
+  if (path) candidates.push(path);
+  candidates.push(
+    resolve(process.cwd(), "stdlib-aliases-python.json"),
+    resolve(process.cwd(), "..", "stdlib-aliases-python.json"),
+    resolve(process.cwd(), "..", "..", "stdlib-aliases-python.json"),
+  );
+  // Also try relative to this module file
   try {
-    const p = path || resolve(process.cwd(), "..", "stdlib-aliases-python.json");
-    const data = JSON.parse(readFileSync(p, "utf-8"));
-    const aliases = data.aliases || {};
-    for (const [alias, info] of Object.entries(aliases) as [string, any][]) {
-      pythonReverseAliasMap[info.python] = alias;
-    }
-  } catch { /* optional — aliases improve compression but are not required */ }
+    const moduleDir = dirname(new URL(import.meta.url).pathname);
+    const normalized = (p: string) => p.replace(/^\/([A-Za-z]:)/, "$1");
+    candidates.push(
+      normalized(resolve(moduleDir, "..", "..", "..", "stdlib-aliases-python.json")),
+      normalized(resolve(moduleDir, "..", "..", "..", "..", "stdlib-aliases-python.json")),
+    );
+  } catch { /* import.meta.url may not resolve in all contexts */ }
+
+  for (const p of candidates) {
+    try {
+      if (!existsSync(p)) continue;
+      const data = JSON.parse(readFileSync(p, "utf-8"));
+      const aliases = data.aliases || {};
+      for (const [alias, info] of Object.entries(aliases) as [string, any][]) {
+        pythonReverseAliasMap[info.python] = alias;
+      }
+      aliasMapLoaded = true;
+      return;
+    } catch { /* try next candidate */ }
+  }
+  // No JSON found — aliases improve compression but aren't required.
+  aliasMapLoaded = true;  // Mark as attempted to avoid infinite retry.
+}
+
+/** Ensure the alias map has been loaded at least once. */
+function ensureAliasMapLoaded(): void {
+  if (!aliasMapLoaded) loadPythonReverseAliases();
 }
 
 // ---------------------------------------------------------------------------
@@ -116,6 +146,9 @@ function findAstDumperPath(): string {
 // pythonAstToIR — main entry: Python JSON AST → IR
 // ---------------------------------------------------------------------------
 export function pythonAstToIR(pyAst: any): IR.IRProgram {
+  // Lazy-load alias map on first use so callers don't need to remember.
+  ensureAliasMapLoaded();
+
   const decls: IR.IRNode[] = [];
   const stmtIdx = { val: 0 };
 
@@ -1184,6 +1217,18 @@ function flattenCallName(expr: IR.IRExpr): string | null {
 // Attribute access
 // ---------------------------------------------------------------------------
 
+// Hardcoded variable-level aliases: only applied when the receiver is the
+// exact identifier name listed below. These aren't in the JSON alias map
+// because they depend on a runtime convention (the variable being called
+// `logger`), not on a stdlib module name.
+//
+// Each entry: full receiver.method → 1-token alias.
+// Verified single-token via cl100k_base (see verify-final-aliases.mjs).
+const VARIABLE_ALIASES: Record<string, string> = {
+  "logger.info":  "Li",
+  "logger.error": "Le",
+};
+
 function convertAttribute(node: any): IR.IRExpr {
   const base = convertExpr(node.Value);
   const attr: string = node.Attr || "";
@@ -1196,6 +1241,9 @@ function convertAttribute(node: any): IR.IRExpr {
     const fullName = `${(base as IR.IRIdent).name}.${attr}`;
     const alias = pythonReverseAliasMap[fullName];
     if (alias) return { kind: "Ident", name: alias };
+    // Variable-level alias (e.g. logger.info → Li)
+    const varAlias = VARIABLE_ALIASES[fullName];
+    if (varAlias) return { kind: "Ident", name: varAlias };
   }
 
   return { kind: "SelectorExpr", x: base, sel: attr };
@@ -1423,6 +1471,10 @@ function pyNodeToAETP(node: IR.IRNode | IR.IRExprStmt): string {
 
     case "AssignStmt": {
       const as_ = node as IR.IRAssignStmt;
+      // Special case: __slots__ = ("a", "b") → slots(a,b) (saves 4+ tokens)
+      // Only when LHS is exactly `__slots__` and RHS is a tuple of string literals.
+      const slotsForm = trySlotsShorthand(as_);
+      if (slotsForm !== null) return slotsForm;
       return `${as_.lhs.map(pyExprToAETP).join(",")}${as_.op}${as_.rhs.map(pyExprToAETP).join(",")}`;
     }
 
@@ -1528,9 +1580,30 @@ function emitFuncDecl(fd: IR.Py_FuncDecl): string {
   return s;
 }
 
+/**
+ * Emit a decorator expression as an AETP string, applying abbreviation rules.
+ *
+ * Rules:
+ * - Bare decorator ident: `dataclass` → `dc`
+ * - Called decorator with args: `dataclass(frozen=True)` → `dc(frozen=True)`
+ *
+ * Extending the rule to the called form saves 1 token per `@dataclass(...)`.
+ */
 function emitDecoratorExpr(expr: IR.IRExpr): string {
+  // Called decorator: check if the callee is an abbreviatable name
+  if (expr.kind === "CallExpr") {
+    const call = expr as IR.IRCallExpr;
+    if (call.func.kind === "Ident") {
+      const funcName = (call.func as IR.IRIdent).name;
+      const abbrev = DECORATOR_ABBREV_REVERSE[funcName];
+      if (abbrev) {
+        const argStrs = call.args.map(pyExprToAETP).join(",");
+        return `${abbrev}(${argStrs})`;
+      }
+    }
+  }
   const raw = pyExprToAETP(expr);
-  // Check for abbreviations
+  // Check for abbreviations on bare decorators
   return DECORATOR_ABBREV_REVERSE[raw] || raw;
 }
 
@@ -1582,6 +1655,89 @@ function emitParam(p: IR.Py_Param): string {
 // Class declaration emitter
 // ---------------------------------------------------------------------------
 
+/**
+ * Try to convert `__slots__ = ("a", "b")` into the shorthand `slots(a,b)`.
+ * Returns the AETP shorthand string, or null if the assignment doesn't match.
+ *
+ * The shorthand saves 4+ tokens per declaration vs the verbose dunder form.
+ */
+function trySlotsShorthand(as_: IR.IRAssignStmt): string | null {
+  if (as_.op !== "=") return null;
+  if (as_.lhs.length !== 1 || as_.rhs.length !== 1) return null;
+  const lhs = as_.lhs[0];
+  if (lhs.kind !== "Ident" || (lhs as IR.IRIdent).name !== "__slots__") return null;
+
+  const rhs = as_.rhs[0];
+  // Accept both Py_TupleExpr and CompositeLit (list-like) of string literals
+  let elts: IR.IRExpr[] = [];
+  if (rhs.kind === "Py_TupleExpr") {
+    elts = (rhs as IR.Py_TupleExpr).elts;
+  } else if (rhs.kind === "CompositeLit") {
+    elts = (rhs as IR.IRCompositeLit).elts;
+  } else {
+    return null;
+  }
+
+  const names: string[] = [];
+  for (const e of elts) {
+    if (e.kind !== "BasicLit") return null;
+    const lit = e as IR.IRBasicLit;
+    if (lit.type !== "STRING") return null;
+    // Strip outer quotes (single or double)
+    const v = lit.value;
+    if (v.length < 2) return null;
+    const first = v[0];
+    const last = v[v.length - 1];
+    if ((first !== '"' && first !== "'") || first !== last) return null;
+    const inner = v.slice(1, -1);
+    // Names must be valid Python identifiers
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(inner)) return null;
+    names.push(inner);
+  }
+
+  if (names.length === 0) return null;
+  return `slots(${names.join(",")})`;
+}
+
+/**
+ * Check whether the class inherits from `Enum`, `IntEnum`, `StrEnum`, or `Flag`
+ * (any Python enum base). Detected by matching a base class Ident name.
+ */
+function isEnumBase(cd: IR.Py_ClassDecl): boolean {
+  const ENUM_BASES = new Set(["Enum", "IntEnum", "StrEnum", "IntFlag", "Flag"]);
+  for (const base of cd.bases || []) {
+    if (base.kind === "Ident" && ENUM_BASES.has((base as IR.IRIdent).name)) {
+      return true;
+    }
+    // Attribute like enum.Enum
+    if (base.kind === "SelectorExpr") {
+      const sel = (base as IR.IRSelectorExpr).sel;
+      if (ENUM_BASES.has(sel)) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Check whether an IR node is an assignment of the form `IDENT = auto()`.
+ * Returns the member name if it matches, otherwise null.
+ */
+function enumAutoMemberName(node: IR.IRNode | IR.IRExprStmt): string | null {
+  if (node.kind !== "AssignStmt") return null;
+  const as_ = node as IR.IRAssignStmt;
+  if (as_.op !== "=") return null;
+  if (as_.lhs.length !== 1 || as_.rhs.length !== 1) return null;
+  const lhs = as_.lhs[0];
+  const rhs = as_.rhs[0];
+  if (lhs.kind !== "Ident") return null;
+  if (rhs.kind !== "CallExpr") return null;
+  const call = rhs as IR.IRCallExpr;
+  if (call.args.length !== 0) return null;
+  if (call.func.kind !== "Ident") return null;
+  if ((call.func as IR.IRIdent).name !== "auto") return null;
+  return (lhs as IR.IRIdent).name;
+}
+
 function emitClassDecl(cd: IR.Py_ClassDecl): string {
   let s = "";
 
@@ -1612,8 +1768,39 @@ function emitClassDecl(cd: IR.Py_ClassDecl): string {
     s += `(${allArgs.join(",")})`;
   }
 
-  // Body
-  const bodyParts = cd.body.map(pyNodeToAETP).filter(s => s && s !== "");
+  // Enum auto() inference: if this is an Enum subclass AND the leading body
+  // members are all `NAME = auto()` assignments, emit them as bare names.
+  // E.g. `RED=auto();GREEN=auto()` (4 tokens × n) → `RED;GREEN` (2 tokens × n).
+  // Non-auto members (methods, other assigns) still emit normally after the
+  // bare-name prefix.
+  let body = cd.body;
+  let enumPrefix = "";
+  if (isEnumBase(cd)) {
+    const autoNames: string[] = [];
+    let cut = 0;
+    for (let i = 0; i < body.length; i++) {
+      const name = enumAutoMemberName(body[i]);
+      if (name === null) break;
+      autoNames.push(name);
+      cut = i + 1;
+    }
+    if (autoNames.length > 0) {
+      enumPrefix = autoNames.join(";");
+      body = body.slice(cut);
+    }
+  }
+
+  // Body — build (kind, str) pairs so joinStmtsCompressed can decide separator safely.
+  const bodyParts: Array<{ kind: string; str: string }> = [];
+  for (const stmt of body) {
+    const str = pyNodeToAETP(stmt);
+    if (!str) continue;
+    bodyParts.push({ kind: stmt.kind, str });
+  }
+  if (enumPrefix) {
+    // Bare enum names: treat as ExprStmt (not block-ending). Safe.
+    bodyParts.unshift({ kind: "ExprStmt", str: enumPrefix });
+  }
   s += `{${joinStmtsCompressed(bodyParts)}}`;
 
   return s;
@@ -1746,28 +1933,65 @@ function emitMatchStmt(node: IR.Py_MatchStmt): string {
 // ---------------------------------------------------------------------------
 
 function pyBlockToAETP(block: IR.IRBlockStmt): string {
-  return joinStmtsCompressed(block.stmts.map(pyNodeToAETP).filter(s => s !== ""));
+  // Build (kind, str) pairs so joinStmtsCompressed can decide separator safely.
+  const pairs: Array<{ kind: string; str: string }> = [];
+  for (const stmt of block.stmts) {
+    const str = pyNodeToAETP(stmt);
+    if (str === "") continue;
+    pairs.push({ kind: stmt.kind, str });
+  }
+  return joinStmtsCompressed(pairs);
 }
 
 /**
- * Join statement strings with `;`, but omit `;` before `^` (return) when the previous
- * statement ends with `}` (block-ending statements like if/for/while/try/with/match).
- * We cannot omit `;` before `^` after expression or assignment statements because
- * `^` is also the XOR operator and the parser would try to parse `expr ^ return_value`
- * as a XOR expression.
+ * Statement kinds that ALWAYS emit a string ending with `}` from a block-end
+ * (not from a literal expression like `{dict}` on a RHS). For these kinds,
+ * we can safely omit the `;` separator before a following `^` (return) — the
+ * sequence `}^` is unambiguous because the closing `}` belongs to a control
+ * structure or class/function body, never to a dict/set literal RHS.
+ *
+ * AssignStmt and ExprStmt are NOT in this set: they may end with `}` from a
+ * dict/set literal on the RHS, in which case `}^expr` would be parsed as a
+ * XOR expression rather than two statements.
  */
-function joinStmtsCompressed(parts: string[]): string {
+const BLOCK_ENDING_KINDS = new Set<string>([
+  "IfStmt",
+  "ForStmt",
+  "RangeStmt",
+  "Py_ForElse",
+  "Py_WhileElse",
+  "Py_TryExcept",
+  "Py_WithStmt",
+  "Py_MatchStmt",
+  "Py_ClassDecl",
+  "FuncDecl",
+  "BlockStmt",
+]);
+
+/**
+ * Join statement strings with `;`, but omit `;` before `^` (return) when the
+ * previous statement is a structural block (if/for/while/try/with/match/class/
+ * func), in which case `}^` is unambiguous.
+ *
+ * We cannot omit `;` before `^` after expression or assignment statements
+ * because `^` is also the XOR operator and `mapping={...}^return_val` would
+ * be parsed as a XOR expression rather than two statements.
+ */
+function joinStmtsCompressed(parts: Array<{ kind: string; str: string }>): string {
   if (parts.length === 0) return "";
-  let result = parts[0];
+  let result = parts[0].str;
   for (let i = 1; i < parts.length; i++) {
-    // Skip `;` separator when next statement starts with `^` (return)
-    // AND previous statement ends with `}` (unambiguous block end)
-    if (parts[i].startsWith("^") && parts[i - 1].endsWith("}")) {
-      // No separator needed — `}^` is unambiguous
-    } else {
+    const cur = parts[i];
+    const prev = parts[i - 1];
+    // Safe to omit `;` only when the next stmt starts with `^` AND the prev
+    // is a structural block (so its trailing `}` is a real block end).
+    const safe = cur.str.startsWith("^") &&
+      prev.str.endsWith("}") &&
+      BLOCK_ENDING_KINDS.has(prev.kind);
+    if (!safe) {
       result += ";";
     }
-    result += parts[i];
+    result += cur.str;
   }
   return result;
 }
@@ -1808,6 +2032,13 @@ function emitBinaryExpr(expr: IR.IRBinaryExpr): string {
 }
 
 function needsParens(child: IR.IRExpr, parentPrec: number, side: "left" | "right", parentOp: string): boolean {
+  // Walrus has the lowest precedence in Python — wrap whenever it appears as
+  // an operand in any binary expression. e.g. `(big := f()) is not None`.
+  if (child.kind === "Py_WalrusExpr") return true;
+  // Ternary `a if cond else b` also has lower precedence than most ops.
+  if (child.kind === "Py_TernaryExpr") return true;
+  // Lambda: parens needed when in any binary expression.
+  if (child.kind === "Py_LambdaExpr") return true;
   if (child.kind !== "BinaryExpr") return false;
   const childPrec = opPrecedence((child as IR.IRBinaryExpr).op);
   // Lower precedence child always needs parens
@@ -2016,7 +2247,15 @@ function emitFString(fstr: IR.Py_FStringExpr): string {
   let inner = "";
   for (const part of fstr.parts) {
     if (typeof part === "string") {
-      inner += part;
+      // Escape special chars so the literal segment of the f-string survives
+      // emission to a single line: \n, \r, \t, backslashes, and embedded
+      // double-quotes (which would otherwise close the outer f"...").
+      inner += part
+        .replace(/\\/g, "\\\\")
+        .replace(/"/g, "\\\"")
+        .replace(/\n/g, "\\n")
+        .replace(/\r/g, "\\r")
+        .replace(/\t/g, "\\t");
     } else {
       let exprStr = pyExprToAETP(part.expr);
       // If the expression contains double quotes, swap them to single quotes

@@ -21,19 +21,51 @@ const STDLIB_ALIASES = {
     ar: { python: "asyncio.run", pkg: "asyncio" },
     ag: { python: "asyncio.gather", pkg: "asyncio" },
     asl: { python: "asyncio.sleep", pkg: "asyncio" },
+    asm: { python: "asyncio.Semaphore", pkg: "asyncio" },
+    asc: { python: "asyncio.create_task", pkg: "asyncio" },
+    ase: { python: "asyncio.Event", pkg: "asyncio" },
+    alk: { python: "asyncio.Lock", pkg: "asyncio" },
+    aq: { python: "asyncio.Queue", pkg: "asyncio" },
+    ate: { python: "asyncio.TimeoutError", pkg: "asyncio" },
     sa: { python: "sys.argv", pkg: "sys" },
     sx: { python: "sys.exit", pkg: "sys" },
+    se: { python: "sys.stderr", pkg: "sys" },
+    so: { python: "sys.stdout", pkg: "sys" },
     rm: { python: "re.match", pkg: "re" },
     rs: { python: "re.search", pkg: "re" },
     rc: { python: "re.compile", pkg: "re" },
     ic: { python: "itertools.chain", pkg: "itertools" },
     ig: { python: "itertools.groupby", pkg: "itertools" },
+    isl: { python: "itertools.islice", pkg: "itertools" },
     lc: { python: "lru_cache", pkg: "functools", fromImport: "from functools import lru_cache" },
+    fw: { python: "functools.wraps", pkg: "functools" },
+    fr: { python: "functools.reduce", pkg: "functools" },
+    fp: { python: "functools.partial", pkg: "functools" },
     fi: { python: "field", pkg: "dataclasses", fromImport: "from dataclasses import field" },
+    tt: { python: "time.time", pkg: "time" },
+    tm: { python: "time.monotonic", pkg: "time" },
+    mpi: { python: "math.pi", pkg: "math" },
+    mh: { python: "math.hypot", pkg: "math" },
+    mic: { python: "math.isclose", pkg: "math" },
+    rr: { python: "random.random", pkg: "random" },
+    ru: { python: "random.uniform", pkg: "random" },
+    rch: { python: "random.choice", pkg: "random" },
+    hp: { python: "heapq.heappush", pkg: "heapq" },
+    DR: { python: "csv.DictReader", pkg: "csv" },
+    DW: { python: "csv.DictWriter", pkg: "csv" },
     isi: { python: "isinstance", pkg: "builtins", auto: true },
     iss: { python: "issubclass", pkg: "builtins", auto: true },
     ha: { python: "hasattr", pkg: "builtins", auto: true },
     rv: { python: "reversed", pkg: "builtins", auto: true },
+};
+// Variable-level aliases: map a 1-token alias back to a `var.method` form.
+// Used by reverse + emitter to compress logger.info / logger.error patterns.
+// These are NOT in STDLIB_ALIASES because they depend on a variable named
+// `logger` existing in scope (typically from `logger = logging.getLogger(...)`),
+// not on a stdlib module that needs importing.
+const VARIABLE_ALIASES = {
+    Li: "logger.info",
+    Le: "logger.error",
 };
 // Popular third-party aliases
 const POPULAR_ALIASES = {
@@ -291,6 +323,22 @@ function emitFuncDecl(node, level) {
     if (IR.PY_MAGIC_METHODS[funcName]) {
         funcName = IR.PY_MAGIC_METHODS[funcName];
     }
+    // Detect classmethod / staticmethod from decorators so we can adjust the
+    // implicit first parameter (cls / nothing) instead of always emitting `self`.
+    let firstParamName = "self"; // null = no implicit first param
+    for (const dec of decorators) {
+        if (dec.expr.kind === "Ident") {
+            const decName = dec.expr.name;
+            if (decName === "classmethod") {
+                firstParamName = "cls";
+                break;
+            }
+            if (decName === "staticmethod") {
+                firstParamName = null;
+                break;
+            }
+        }
+    }
     // Emit decorators
     for (const dec of decorators) {
         lines.push(`${indent(level)}@${emitExpr(dec.expr)}`);
@@ -299,15 +347,15 @@ function emitFuncDecl(node, level) {
     let paramStr;
     const isMethod = _insideClassBody;
     if (isPyParamList(pyParams)) {
-        paramStr = emitPyParamList(pyParams, isMethod);
+        paramStr = emitPyParamList(pyParams, isMethod, firstParamName);
     }
     else {
         // Standard IR params (from Go/shared IR)
         const irParams = node.params;
         const paramParts = [];
-        // Add self for methods
-        if (isMethod) {
-            paramParts.push("self");
+        // Add implicit first param for methods (self / cls / nothing)
+        if (isMethod && firstParamName !== null) {
+            paramParts.push(firstParamName);
         }
         for (const p of irParams) {
             if (emitOptions.typed && p.type) {
@@ -362,12 +410,18 @@ function emitFuncDecl(node, level) {
 function isPyParamList(obj) {
     return obj && Array.isArray(obj.params);
 }
-/** Emit a Python-specific parameter list. */
-function emitPyParamList(paramList, isMethod) {
+/**
+ * Emit a Python-specific parameter list.
+ *
+ * @param firstParamName  Implicit first parameter to inject for methods. Pass
+ *                        "self" for normal methods, "cls" for @classmethod, or
+ *                        null for @staticmethod / module-level functions.
+ */
+function emitPyParamList(paramList, isMethod, firstParamName = "self") {
     const parts = [];
-    // Add self for methods
-    if (isMethod) {
-        parts.push("self");
+    // Add implicit first param for methods (self / cls / nothing)
+    if (isMethod && firstParamName !== null) {
+        parts.push(firstParamName);
     }
     // Positional-only params (before /)
     if (paramList.posonly && paramList.posonly.length > 0) {
@@ -1028,6 +1082,11 @@ function emitIdent(expr) {
         case "false": return "False";
         case "iota": return "# iota (use enum.auto())";
         default: {
+            // Variable-level alias (e.g. Li → logger.info as a bare reference)
+            const varAlias = VARIABLE_ALIASES[expr.name];
+            if (varAlias) {
+                return varAlias;
+            }
             // Check stdlib aliases
             const alias = STDLIB_ALIASES[expr.name];
             if (alias) {
@@ -1169,6 +1228,7 @@ function emitBinaryExpr(expr) {
 function emitUnaryExpr(expr) {
     switch (expr.op) {
         case "!": return `not ${emitExpr(expr.x)}`;
+        case "not": return `not ${emitExpr(expr.x)}`;
         case "&": return emitExpr(expr.x); // Address-of has no Python equivalent
         case "^": return `~${emitExpr(expr.x)}`; // Go bitwise NOT
         default: return `${expr.op}${emitExpr(expr.x)}`;
@@ -1188,6 +1248,16 @@ function emitCallExpr(expr) {
     // Check if function is a stdlib alias
     if (expr.func.kind === "Ident") {
         const name = expr.func.name;
+        // enum.auto() — track import when called (used by enum member inference)
+        if (name === "auto") {
+            importTracker.addRawFrom("from enum import auto");
+        }
+        // Variable-level alias (e.g. Li → logger.info). No import tracking
+        // needed: the `logger` variable is preserved in the AETP source.
+        const varAlias = VARIABLE_ALIASES[name];
+        if (varAlias) {
+            return `${varAlias}(${args})`;
+        }
         const alias = STDLIB_ALIASES[name];
         if (alias) {
             if (alias.fromImport) {

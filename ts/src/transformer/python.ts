@@ -298,9 +298,11 @@ function transformDecoratorExpr(node: CstNode): IR.IRExpr {
   }
 
   // Check for call args: @decorator(args)
-  const al = child(node, "argList");
-  if (al) {
-    const args = transformArgList(al);
+  // Grammar rule decoratorExpr uses `callArgs` (not `argList`). This path
+  // handles both @dc(frozen=True) and @app.route("/users", methods=["GET"]).
+  const ca = child(node, "callArgs");
+  if (ca) {
+    const args = transformCallArgs(ca);
     expr = { kind: "CallExpr", func: expr, args } as IR.IRCallExpr;
   } else if (tok(node, "LParen") !== undefined) {
     // Empty parens: @decorator()
@@ -312,32 +314,58 @@ function transformDecoratorExpr(node: CstNode): IR.IRExpr {
 
 // ─── Class Declaration ───────────────────────────────────────────────────────
 
+/** Returns true if any of the class bases is a Python enum base class. */
+function hasEnumBase(bases: IR.IRExpr[]): boolean {
+  const ENUM_BASES = new Set(["Enum", "IntEnum", "StrEnum", "IntFlag", "Flag"]);
+  for (const base of bases) {
+    if (base.kind === "Ident" && ENUM_BASES.has((base as IR.IRIdent).name)) return true;
+    if (base.kind === "SelectorExpr" && ENUM_BASES.has((base as IR.IRSelectorExpr).sel)) return true;
+  }
+  return false;
+}
+
 function transformClassDecl(node: CstNode, decorators: IR.Py_Decorator[]): IR.Py_ClassDecl {
   const name = tok(node, "Ident") || "";
   const si = nextStmtIndex();
 
-  // Base classes and keywords from argList
+  // Base classes and keywords from callArgs (grammar uses callArgs, not argList).
+  // Distinguish positional bases from keyword args (e.g., metaclass=Meta).
   const bases: IR.IRExpr[] = [];
   const keywords: { key: string; value: IR.IRExpr }[] = [];
-  const al = child(node, "argList");
-  if (al) {
-    const args = children(al, "arg");
-    for (const a of args) {
-      // Keyword arg in bases: metaclass=Meta
-      const idents = tokAll(a, "Ident");
-      // Simple heuristic: check for = sign at top-level
-      // Since arg rule is: ** expr | * expr | expr, and keyword is handled as
-      // ident=expr within the expression itself, we need a simpler approach
-      const expr = child(a, "expr");
-      if (expr) {
-        bases.push(transformExpr(expr));
+  const ca = child(node, "callArgs");
+  if (ca) {
+    const callArgItems = children(ca, "callArg");
+    for (const a of callArgItems) {
+      const identTok = tok(a, "Ident");
+      const assignTok = tok(a, "Assign");
+      const doubleStar = tok(a, "DoubleStar");
+      const star = tok(a, "Star");
+      const exprNode = child(a, "expr");
+
+      if (doubleStar && exprNode) {
+        bases.push({ kind: "Py_StarExpr", value: transformExpr(exprNode), isDouble: true } as IR.Py_StarExpr);
+      } else if (star && exprNode) {
+        bases.push({ kind: "Py_StarExpr", value: transformExpr(exprNode), isDouble: false } as IR.Py_StarExpr);
+      } else if (identTok && assignTok && exprNode) {
+        // Keyword argument: key=value (e.g., metaclass=Meta)
+        keywords.push({ key: identTok, value: transformExpr(exprNode) });
+      } else if (exprNode) {
+        // Positional base class
+        bases.push(transformExpr(exprNode));
       }
     }
   }
 
-  // Class body
+  // Class body. When the class extends Enum (or similar), bare identifier
+  // ExprStmts are promoted to `name = auto()` assignments — inverse of the
+  // reverse transpiler's enum-auto inference.
   const cb = child(node, "classBody");
-  const body: (IR.IRNode | IR.IRExprStmt)[] = cb ? transformClassBody(cb) : [];
+  let body: (IR.IRNode | IR.IRExprStmt)[] = cb ? transformClassBody(cb) : [];
+
+  if (hasEnumBase(bases)) {
+    addRawFromImport("from enum import auto");
+    body = body.map(stmt => promoteBareIdentToEnumAuto(stmt));
+  }
 
   return {
     kind: "Py_ClassDecl",
@@ -348,6 +376,34 @@ function transformClassDecl(node: CstNode, decorators: IR.Py_Decorator[]): IR.Py
     body,
     stmtIndex: si,
   };
+}
+
+/**
+ * If `stmt` is a bare identifier ExprStmt (e.g. `RED`), convert it to an
+ * AssignStmt of the form `RED = auto()`. Otherwise return the stmt unchanged.
+ *
+ * This is the inverse of the enum-auto inference in reverse/python.ts.
+ */
+function promoteBareIdentToEnumAuto(stmt: IR.IRNode | IR.IRExprStmt): IR.IRNode | IR.IRExprStmt {
+  if (stmt.kind !== "ExprStmt") return stmt;
+  const expr = (stmt as IR.IRExprStmt).expr;
+  if (expr.kind !== "Ident") return stmt;
+  const name = (expr as IR.IRIdent).name;
+  // Skip names that are obviously not enum members (keywords, pass, etc.)
+  if (name === "pass" || name === "_" || name === "...") return stmt;
+
+  const autoCall: IR.IRCallExpr = {
+    kind: "CallExpr",
+    func: { kind: "Ident", name: "auto" } as IR.IRIdent,
+    args: [],
+  };
+  return {
+    kind: "AssignStmt",
+    lhs: [{ kind: "Ident", name } as IR.IRIdent],
+    rhs: [autoCall],
+    op: "=",
+    stmtIndex: (stmt as any).stmtIndex ?? 0,
+  } as IR.IRAssignStmt;
 }
 
 function transformClassBody(node: CstNode): (IR.IRNode | IR.IRExprStmt)[] {
@@ -440,6 +496,10 @@ function transformPyParamList(node: CstNode): IR.Py_ParamList {
   const result: IR.Py_ParamList = { params: [] };
   const params = children(node, "param");
 
+  // Track whether we've seen a `*args` or bare `*` separator. After that
+  // separator, subsequent params are keyword-only and must go into `kwonly`.
+  let inKwonly = false;
+
   for (const p of params) {
     // Check for **kwargs
     if (tok(p, "DoubleStar") !== undefined) {
@@ -450,7 +510,7 @@ function transformPyParamList(node: CstNode): IR.Py_ParamList {
       continue;
     }
 
-    // Check for * or *args
+    // Check for * or *args (transitions us into keyword-only mode)
     if (tok(p, "Star") !== undefined) {
       const name = tok(p, "Ident");
       if (name) {
@@ -458,7 +518,8 @@ function transformPyParamList(node: CstNode): IR.Py_ParamList {
         const type = te ? transformTypeAnnotation(te) : undefined;
         result.vararg = { name, type };
       }
-      // bare * is keyword-only separator — subsequent params become kwonly
+      // bare * (no name) and *args both mark the start of keyword-only params
+      inKwonly = true;
       continue;
     }
 
@@ -476,7 +537,12 @@ function transformPyParamList(node: CstNode): IR.Py_ParamList {
     const type = te ? transformTypeAnnotation(te) : undefined;
     const defaultExpr = child(p, "expr");
     const default_ = defaultExpr ? transformExpr(defaultExpr) : undefined;
-    result.params.push({ name, type, default_ });
+    if (inKwonly) {
+      if (!result.kwonly) result.kwonly = [];
+      result.kwonly.push({ name, type, default_ });
+    } else {
+      result.params.push({ name, type, default_ });
+    }
   }
 
   return result;
@@ -1256,13 +1322,16 @@ function transformCallArg(node: CstNode): IR.IRExpr {
     return { kind: "Py_StarExpr", value: expr ? transformExpr(expr) : { kind: "Ident", name: "_" }, isDouble: false } as IR.Py_StarExpr;
   }
 
-  // keyword=value
-  const ident = tok(node, "Ident");
+  // keyword=value (parser rule: callArg -> keywordArgName '=' expr)
+  // The Ident sits inside the keywordArgName SUBRULE, not directly under callArg.
+  const kwName = child(node, "keywordArgName");
   const assign = tok(node, "Assign");
-  if (ident && assign) {
+  if (kwName && assign) {
+    // keywordArgName: Ident | Slots | Match | Case
+    const keyTok = tok(kwName, "Ident") ?? tok(kwName, "Slots") ?? tok(kwName, "Match") ?? tok(kwName, "Case") ?? "_";
     const expr = child(node, "expr");
     const val = expr ? transformExpr(expr) : { kind: "Ident" as const, name: "_" };
-    return { kind: "KeyValueExpr", key: { kind: "Ident", name: ident }, value: val } as IR.IRKeyValueExpr;
+    return { kind: "KeyValueExpr", key: { kind: "Ident", name: keyTok }, value: val } as IR.IRKeyValueExpr;
   }
 
   // Positional argument
@@ -1815,7 +1884,20 @@ function parseFString(fstr: string): IR.Py_FStringExpr {
         formatSpec = exprStr.slice(colonIdx + 1);
         exprStr = exprStr.slice(0, colonIdx);
       }
-      const expr: IR.IRExpr = { kind: "Ident", name: exprStr.trim() };
+      // Restore self.* sugar inside f-string expressions:
+      //   {.attr}            → {self.attr}
+      //   {._color.name}     → {self._color.name}
+      //   {len(._filters)}   → {len(self._filters)}
+      //   {f(.x, .y)}        → {f(self.x, self.y)}
+      // Match any `.` that begins a `.IDENT` chain where the `.` is preceded
+      // by start-of-string, an opener (`(`, `[`, `{`, `,`, `=`, `<`, `>`,
+      // `+`, `-`, `*`, `/`, `%`, `&`, `|`, `^`, `~`, `:`), or whitespace —
+      // i.e., NOT preceded by an identifier char or `)` or `]` (which would
+      // indicate continued attribute access on a real receiver).
+      const trimmed = exprStr
+        .trim()
+        .replace(/(^|[(\[{,=<>+\-*/%&|^~:\s])(\.[A-Za-z_][A-Za-z0-9_]*)/g, "$1self$2");
+      const expr: IR.IRExpr = { kind: "Ident", name: trimmed };
       parts.push({ expr, conversion, formatSpec });
     } else if (inner[i] === "{" && inner[i + 1] === "{") {
       current += "{";
