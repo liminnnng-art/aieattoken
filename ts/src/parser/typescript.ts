@@ -293,7 +293,7 @@ export function parseTypescriptAET(source: string): ParseResult {
   const lexer = new Lexer(body, isJsx);
   const tokens = lexer.tokenize();
 
-  const parser = new Parser(tokens, isJsx);
+  const parser = new Parser(tokens, isJsx, body);
   try {
     const decls = parser.parseProgram();
     const program: IR.IRProgram = {
@@ -319,10 +319,13 @@ class Parser {
   public isJsx: boolean;
   // Context: inside class body (affects .attr meaning)
   private _insideClass: boolean = false;
+  // Source string, used to extract raw JSX text runs by position.
+  public src: string;
 
-  constructor(toks: Tok[], isJsx: boolean) {
+  constructor(toks: Tok[], isJsx: boolean, src: string = "") {
     this.toks = toks;
     this.isJsx = isJsx;
+    this.src = src;
   }
 
   // ---------------------- Utility ----------------------
@@ -2386,13 +2389,23 @@ class Parser {
         children.push({ kind: "Ts_JsxExpression", expr } as IR.Ts_JsxExpression);
         continue;
       }
-      // JSX text — accumulate ident/num/whitespace until < or {
-      if (this.match("ident") || this.match("num") || this.match("str")) {
-        const text = this.advance().value;
-        children.push({ kind: "Ts_JsxText", text } as IR.Ts_JsxText);
-        continue;
+      if (this.match("eof")) break;
+      // JSX text — collect a run of tokens until we see `<` or `{`.
+      // We extract the raw text from the source using the start/end positions
+      // of the first and last tokens in the run. This preserves original spacing.
+      const startTok = this.tok();
+      const startPos = startTok.start;
+      let endPos = startTok.end;
+      while (!this.match("eof")) {
+        const t = this.tok();
+        if (t.kind === "punct" && (t.value === "<" || t.value === "{")) break;
+        endPos = t.end;
+        this.advance();
       }
-      break;
+      // If we didn't advance (no consumable tokens), stop.
+      if (endPos === startPos) break;
+      const text = this.src.substring(startPos, endPos);
+      children.push({ kind: "Ts_JsxText", text } as IR.Ts_JsxText);
     }
     return children;
   }

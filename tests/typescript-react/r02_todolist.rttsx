@@ -17,7 +17,7 @@ const TodoList = () => {
 }, removeTodo = (id) => {
   setTodos(todos.filter((t) => t.id !== id));
 };
-  return <div><input value={input} onChange={(e) => setInput(e.target.value)} /><button onClick={addTodo}>{"Add"}</button><ul>{todos.map((t) => <li key={t.id}><span onClick={() => toggleTodo(t.id)}>{t.text}</span><button onClick={() => removeTodo(t.id)}>{"X"}</button></li>)}</ul></div>;
+  return <div><input value={input} onChange={(e) => setInput(e.target.value)} /><button onClick={addTodo}>Add</button><ul>{todos.map((t) => <li key={t.id}><span onClick={() => toggleTodo(t.id)}>{t.text}</span><button onClick={() => removeTodo(t.id)}>X</button></li>)}</ul></div>;
 };
 
 export default TodoList;

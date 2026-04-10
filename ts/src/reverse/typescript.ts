@@ -1007,11 +1007,15 @@ function emitJsxChild(child: ts.JsxChild, ctx: Ctx): string {
     // Collapse pure-whitespace text to empty (React/JSX convention)
     const text = child.text;
     if (/^\s*$/.test(text)) return "";
-    // Wrap JSX text in `{"..."}` to make it unambiguous for the AET parser.
-    // (JSX text is context-sensitive and can contain arbitrary `/`, `:`, etc.
-    // which would confuse a general-purpose JS lexer.)
-    const trimmed = text.replace(/^\s+|\s+$/g, (m) => m.includes("\n") ? "" : m);
-    return "{" + JSON.stringify(trimmed) + "}";
+    // Trim surrounding newline-whitespace, keep internal content intact.
+    let trimmed = text.replace(/^\s*\n\s*/g, "").replace(/\s*\n\s*$/g, "");
+    // If the text contains characters that conflict with the AET parser
+    // (unescaped `{`, or a trailing/leading `<`/`>`), fall back to `{"..."}`.
+    if (/[{}]/.test(trimmed)) {
+      return "{" + JSON.stringify(trimmed) + "}";
+    }
+    // Emit raw — the AET parser's JSX-children mode reads text until `<` or `{`.
+    return trimmed;
   }
   if (ts.isJsxExpression(child)) {
     return "{" + (child.expression ? emitExpr(child.expression, ctx) : "") + "}";
