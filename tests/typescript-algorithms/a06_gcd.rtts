@@ -1,0 +1,19 @@
+function gcd(a, b) {
+  while (b !== 0) {
+    const t = b;
+    b = a % b;
+    a = t;
+  }
+  return a;
+}
+
+function lcm(a, b) {
+  return (a * b) / gcd(a, b);
+}
+
+function main() {
+  console.log(gcd(48, 18));
+  console.log(lcm(12, 18));
+}
+
+main();

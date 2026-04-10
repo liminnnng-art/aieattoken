@@ -1,0 +1,2 @@
+!tsx1
+@CounterProps{initial:n;step:n};:=Counter=({initial,step})=>{:=[count,setCount]=useState(initial);ue(()=>{document.title="Count: "+count},[count]);:=increment=()=>setCount(count+step);:=decrement=()=>setCount(count-step);:=reset=()=>setCount(initial);^<div className="counter"><h1>{"Count: "}{count}</h1><button onClick={increment}>{"+"}{step}</button><button onClick={decrement}>{"-"}{step}</button><button onClick={reset}>{"Reset"}</button></div>};+d Counter

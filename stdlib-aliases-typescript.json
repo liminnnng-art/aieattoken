@@ -1,0 +1,179 @@
+{
+  "_version": "0.1",
+  "_tokenizer": "cl100k_base",
+  "_description": "TypeScript stdlib alias mapping for AET-TypeScript. Every alias verified as single cl100k_base token. Covers console/JSON/Math/Object/Array, Promise, Node fs/path, and React hooks.",
+  "_count": 46,
+  "aliases": {
+    "pl": {
+      "ts": "console.log",
+      "pkg": "builtin"
+    },
+    "Se": {
+      "ts": "console.error",
+      "pkg": "builtin"
+    },
+    "cw": {
+      "ts": "console.warn",
+      "pkg": "builtin"
+    },
+    "ci": {
+      "ts": "console.info",
+      "pkg": "builtin"
+    },
+    "cd": {
+      "ts": "console.debug",
+      "pkg": "builtin"
+    },
+    "jd": {
+      "ts": "JSON.stringify",
+      "pkg": "builtin"
+    },
+    "jl": {
+      "ts": "JSON.parse",
+      "pkg": "builtin"
+    },
+    "Ok": {
+      "ts": "Object.keys",
+      "pkg": "builtin"
+    },
+    "Of": {
+      "ts": "Object.freeze",
+      "pkg": "builtin"
+    },
+    "Af": {
+      "ts": "Array.from",
+      "pkg": "builtin"
+    },
+    "Ai": {
+      "ts": "Array.isArray",
+      "pkg": "builtin"
+    },
+    "Ma": {
+      "ts": "Math.abs",
+      "pkg": "builtin"
+    },
+    "Mc": {
+      "ts": "Math.ceil",
+      "pkg": "builtin"
+    },
+    "Mr": {
+      "ts": "Math.round",
+      "pkg": "builtin"
+    },
+    "Ms": {
+      "ts": "Math.sqrt",
+      "pkg": "builtin"
+    },
+    "Mp": {
+      "ts": "Math.pow",
+      "pkg": "builtin"
+    },
+    "Pas": {
+      "ts": "Promise.allSettled",
+      "pkg": "builtin"
+    },
+    "Pal": {
+      "ts": "Promise.all",
+      "pkg": "builtin"
+    },
+    "Pr": {
+      "ts": "Promise.resolve",
+      "pkg": "builtin"
+    },
+    "Pan": {
+      "ts": "Promise.any",
+      "pkg": "builtin"
+    },
+    "rf": {
+      "ts": "readFileSync",
+      "pkg": "fs",
+      "fromImport": "import { readFileSync } from \"fs\""
+    },
+    "wf": {
+      "ts": "writeFileSync",
+      "pkg": "fs",
+      "fromImport": "import { writeFileSync } from \"fs\""
+    },
+    "ef": {
+      "ts": "existsSync",
+      "pkg": "fs",
+      "fromImport": "import { existsSync } from \"fs\""
+    },
+    "rd": {
+      "ts": "readdirSync",
+      "pkg": "fs",
+      "fromImport": "import { readdirSync } from \"fs\""
+    },
+    "pj": {
+      "ts": "join",
+      "pkg": "path",
+      "fromImport": "import { join } from \"path\""
+    },
+    "pres": {
+      "ts": "resolve",
+      "pkg": "path",
+      "fromImport": "import { resolve } from \"path\""
+    },
+    "pb": {
+      "ts": "basename",
+      "pkg": "path",
+      "fromImport": "import { basename } from \"path\""
+    },
+    "pd": {
+      "ts": "dirname",
+      "pkg": "path",
+      "fromImport": "import { dirname } from \"path\""
+    },
+    "pe": {
+      "ts": "extname",
+      "pkg": "path",
+      "fromImport": "import { extname } from \"path\""
+    },
+    "FC": {
+      "ts": "FC",
+      "pkg": "react",
+      "fromImport": "import { FC } from \"react\""
+    },
+    "RN": {
+      "ts": "ReactNode",
+      "pkg": "react",
+      "fromImport": "import { ReactNode } from \"react\""
+    },
+    "JE": {
+      "ts": "JSX.Element",
+      "pkg": "react",
+      "namespaceImport": "import * as React from \"react\""
+    },
+    "ue": {
+      "ts": "useEffect",
+      "pkg": "react",
+      "fromImport": "import { useEffect } from \"react\""
+    },
+    "uC": {
+      "ts": "useCallback",
+      "pkg": "react",
+      "fromImport": "import { useCallback } from \"react\""
+    },
+    "_typeAliases": {
+      "_comment": "Single-char type aliases used in parameter/field positions only. Not applied as global aliases.",
+      "s": "string",
+      "n": "number",
+      "b": "boolean",
+      "v": "void",
+      "u": "undefined",
+      "A": "any",
+      "uk": "unknown",
+      "nv": "never"
+    },
+    "_utilityAliases": {
+      "_comment": "Utility type aliases with verified single-token savings.",
+      "RA": "ReadonlyArray",
+      "NN": "NonNullable",
+      "Ro": "Readonly",
+      "Om": "Omit",
+      "Aw": "Awaited",
+      "WM": "WeakMap",
+      "WS": "WeakSet"
+    }
+  }
+}

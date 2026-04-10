@@ -1,0 +1,56 @@
+{
+  "version": "0.2.0",
+  "tokenizer": "cl100k_base",
+  "mode": "default (types erased except on class fields)",
+  "overall": {
+    "files": 12,
+    "ts_tokens": 2266,
+    "aet_tokens": 1575,
+    "saved_pct": 30.5,
+    "roundtrip_ok": "12/12"
+  },
+  "by_suite": {
+    "algorithms": {
+      "files": 7,
+      "ts_tokens": 946,
+      "aet_tokens": 668,
+      "saved_pct": 29.4,
+      "roundtrip_ok": "7/7"
+    },
+    "react": {
+      "files": 2,
+      "ts_tokens": 483,
+      "aet_tokens": 360,
+      "saved_pct": 25.5,
+      "roundtrip_ok": "2/2"
+    },
+    "backend": {
+      "files": 2,
+      "ts_tokens": 623,
+      "aet_tokens": 385,
+      "saved_pct": 38.2,
+      "roundtrip_ok": "2/2"
+    },
+    "types": {
+      "files": 1,
+      "ts_tokens": 214,
+      "aet_tokens": 162,
+      "saved_pct": 24.3,
+      "roundtrip_ok": "1/1"
+    }
+  },
+  "files": [
+    { "suite": "algorithms", "file": "a01_fibonacci.ts", "ts": 70, "aet": 54, "saved": "22.9%" },
+    { "suite": "algorithms", "file": "a02_fizzbuzz.ts", "ts": 96, "aet": 75, "saved": "21.9%" },
+    { "suite": "algorithms", "file": "a03_bubblesort.ts", "ts": 171, "aet": 116, "saved": "32.2%" },
+    { "suite": "algorithms", "file": "a04_binsearch.ts", "ts": 161, "aet": 110, "saved": "31.7%" },
+    { "suite": "algorithms", "file": "a05_palindrome.ts", "ts": 139, "aet": 109, "saved": "21.6%" },
+    { "suite": "algorithms", "file": "a06_gcd.ts", "ts": 102, "aet": 62, "saved": "39.2%" },
+    { "suite": "algorithms", "file": "a07_matrix.ts", "ts": 207, "aet": 142, "saved": "31.4%" },
+    { "suite": "react", "file": "r01_counter.tsx", "ts": 184, "aet": 139, "saved": "24.5%" },
+    { "suite": "react", "file": "r02_todolist.tsx", "ts": 299, "aet": 221, "saved": "26.1%" },
+    { "suite": "backend", "file": "b01_userservice.ts", "ts": 337, "aet": 207, "saved": "38.6%" },
+    { "suite": "backend", "file": "b02_express_router.ts", "ts": 286, "aet": 178, "saved": "37.8%" },
+    { "suite": "types", "file": "t01_utility.ts", "ts": 214, "aet": 162, "saved": "24.3%" }
+  ]
+}

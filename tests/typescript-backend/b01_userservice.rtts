@@ -1,0 +1,52 @@
+import { existsSync, readFileSync, writeFileSync } from "fs";
+import { join } from "path";
+interface User {
+  id: number;
+  name: string;
+  email: string;
+  createdAt: string;
+}
+
+class UserService {
+  private users: User[] = [];
+  private readonly filePath: string;
+  constructor(dataDir) {
+    this.filePath = join(dataDir, "users.json");
+    this.load();
+  }
+  private load() {
+    if (existsSync(this.filePath)) {
+      const data = readFileSync(this.filePath, "utf-8");
+      this.users = JSON.parse(data);
+    }
+  }
+  private save() {
+    writeFileSync(this.filePath, JSON.stringify(this.users, null, 2));
+  }
+  findById(id) {
+    return this.users.find((u) => u.id === id);
+  }
+  findByEmail(email) {
+    return this.users.find((u) => u.email === email);
+  }
+  create(name, email) {
+    const newUser = { id: this.users.length + 1, name, email, createdAt: new Date().toISOString() };
+    this.users.push(newUser);
+    this.save();
+    return newUser;
+  }
+  delete(id) {
+    const idx = this.users.findIndex((u) => u.id === id);
+    if (idx === -1) {
+      return false;
+    }
+    this.users.splice(idx, 1);
+    this.save();
+    return true;
+  }
+  list() {
+    return [...this.users];
+  }
+}
+
+export default UserService;

@@ -1,0 +1,27 @@
+interface Todo {
+  id: number;
+  text: string;
+  done: boolean;
+}
+
+const TodoList = () => {
+  const [todos, setTodos] = useState([]);
+  const [input, setInput] = useState("");
+  const addTodo = () => {
+  if (input.trim() === "") {
+    return;
+  }
+  const newTodo = { id: Date.now(), text: input, done: false };
+  setTodos([...todos, newTodo]);
+  setInput("");
+};
+  const toggleTodo = (id) => {
+  setTodos(todos.map((t) => t.id === id ? { ...t, done: !t.done } : t));
+};
+  const removeTodo = (id) => {
+  setTodos(todos.filter((t) => t.id !== id));
+};
+  return <div><input value={input} onChange={(e) => setInput(e.target.value)} /><button onClick={addTodo}>{"Add"}</button><ul>{todos.map((t) => <li key={t.id}><span onClick={() => toggleTodo(t.id)}>{t.text}</span><button onClick={() => removeTodo(t.id)}>{"X"}</button></li>)}</ul></div>;
+};
+
+export default TodoList;

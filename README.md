@@ -1,6 +1,6 @@
 # aieattoken (AET)
 
-Compress Go, Java, and Python source code into a compact, AI-native format that LLMs can read and write directly -- saving 30-55% of tokens while preserving full semantic fidelity.
+Compress Go, Java, Python, and TypeScript source code into a compact, AI-native format that LLMs can read and write directly -- saving 25-55% of tokens while preserving full semantic fidelity.
 
 ## Why?
 
@@ -34,6 +34,16 @@ Token counts measured with cl100k_base (GPT-4 / Claude tokenizer).
 |-----------|-------|-------------|
 | Real-world scripts | 5 | **38.2%** |
 
+### TypeScript (.ts -> .aets, .tsx -> .aetx)
+
+| Benchmark | Files | Avg Savings |
+|-----------|-------|-------------|
+| Algorithms | 7 | **29.4%** |
+| React components | 2 | **25.5%** |
+| Backend services | 2 | **38.2%** |
+| Utility types | 1 | **24.3%** |
+| Overall | 12 | **30.5%** |
+
 ## Install
 
 ```bash
@@ -46,6 +56,7 @@ npm install -g aieattoken
 - Go toolchain (for `aet convert *.go` and `aet build`)
 - JDK 17+ (for `aet convert *.java`)
 - Python 3.10+ (for `aet convert *.py`)
+- No extra tools for `aet convert *.ts` / `*.tsx` — uses the bundled TypeScript compiler API
 
 The `compile` command (AET -> source) requires only Node.js.
 
@@ -65,6 +76,12 @@ aet convert UserService.java
 # Python -> AETP
 aet convert app.py
 # Output: app.aetp
+
+# TypeScript -> AETS / AETX
+aet convert service.ts
+# Output: service.aets
+aet convert App.tsx
+# Output: App.aetx
 ```
 
 ### Compile AET back to source
@@ -81,6 +98,15 @@ aet compile app.aetp
 
 # AETP -> Python with type hints
 aet compile app.aetp --typed
+
+# AETS -> TypeScript
+aet compile service.aets
+
+# AETS -> TypeScript with restored type annotations
+aet compile service.aets --typed
+
+# AETX -> TSX
+aet compile App.aetx
 
 # Write to file
 aet compile server.aet -o server.go

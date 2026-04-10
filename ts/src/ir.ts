@@ -49,7 +49,30 @@ export type IRNode =
   | Py_GlobalStmt
   | Py_NonlocalStmt
   | Py_ForElse
-  | Py_WhileElse;
+  | Py_WhileElse
+  // TypeScript-specific nodes (v1)
+  | Ts_InterfaceDecl
+  | Ts_TypeAliasDecl
+  | Ts_ClassDecl
+  | Ts_EnumDecl
+  | Ts_FuncDecl
+  | Ts_VarStmt
+  | Ts_IfStmt
+  | Ts_ForStmt
+  | Ts_ForInStmt
+  | Ts_ForOfStmt
+  | Ts_WhileStmt
+  | Ts_DoWhileStmt
+  | Ts_SwitchStmt
+  | Ts_TryStmt
+  | Ts_ThrowStmt
+  | Ts_ReturnStmt
+  | Ts_ExprStmt
+  | Ts_BlockStmt
+  | Ts_BreakStmt
+  | Ts_ContinueStmt
+  | Ts_LabeledStmt
+  | Ts_NamespaceDecl;
 
 export type IRExpr =
   | IRIdent
@@ -96,7 +119,46 @@ export type IRExpr =
   | Py_WalrusExpr
   | Py_DictExpr
   | Py_SetExpr
-  | Py_TupleExpr;
+  | Py_TupleExpr
+  // TypeScript-specific expressions
+  | Ts_ArrowFn
+  | Ts_TemplateLit
+  | Ts_TaggedTemplate
+  | Ts_TypeAssertion
+  | Ts_AsExpr
+  | Ts_SatisfiesExpr
+  | Ts_NonNullExpr
+  | Ts_ObjectLit
+  | Ts_ArrayLit
+  | Ts_SpreadExpr
+  | Ts_AwaitExpr
+  | Ts_YieldExpr
+  | Ts_ConditionalExpr
+  | Ts_NewExpr
+  | Ts_RegexLit
+  | Ts_JsxElement
+  | Ts_JsxFragment
+  | Ts_JsxExpression
+  | Ts_JsxText
+  | Ts_JsxSelfClose
+  // TypeScript type-level expressions
+  | Ts_UnionType
+  | Ts_IntersectionType
+  | Ts_TupleType
+  | Ts_ArrayType
+  | Ts_TypeRef
+  | Ts_TypeLit
+  | Ts_FnType
+  | Ts_ConditionalType
+  | Ts_MappedType
+  | Ts_IndexedAccessType
+  | Ts_LiteralType
+  | Ts_TemplateLiteralType
+  | Ts_ParenType
+  | Ts_TypeofType
+  | Ts_KeyofType
+  | Ts_InferType
+  | Ts_TypePredicateExpr;
 
 export type IRType = {
   name: string;        // "int", "string", "error", "[]byte", "map[string]int", "*User", etc.
@@ -896,3 +958,540 @@ export const PY_MAGIC_METHODS: Record<string, string> = {
 export const PY_MAGIC_REVERSE: Record<string, string> = Object.fromEntries(
   Object.entries(PY_MAGIC_METHODS).map(([k, v]) => [v, k])
 );
+
+// ============= TypeScript-Specific IR Nodes =============
+// Used by reverse/typescript.ts (TS source → IR) and emitter/typescript.ts (IR → TS).
+
+export interface Ts_Param {
+  name: string;
+  type?: Ts_TypeExpr;
+  optional?: boolean;
+  default_?: IRExpr;
+  rest?: boolean;
+  modifier?: string;
+}
+
+export type Ts_TypeExpr =
+  | Ts_TypeRef
+  | Ts_ArrayType
+  | Ts_TupleType
+  | Ts_UnionType
+  | Ts_IntersectionType
+  | Ts_FnType
+  | Ts_TypeLit
+  | Ts_ConditionalType
+  | Ts_MappedType
+  | Ts_IndexedAccessType
+  | Ts_LiteralType
+  | Ts_TemplateLiteralType
+  | Ts_ParenType
+  | Ts_TypeofType
+  | Ts_KeyofType
+  | Ts_InferType
+  | Ts_TypePredicateExpr;
+
+export interface Ts_TypeParam {
+  name: string;
+  constraint?: Ts_TypeExpr;
+  default_?: Ts_TypeExpr;
+}
+
+export interface Ts_TypeRef {
+  kind: "Ts_TypeRef";
+  name: string;
+  typeArgs?: Ts_TypeExpr[];
+}
+
+export interface Ts_ArrayType {
+  kind: "Ts_ArrayType";
+  elt: Ts_TypeExpr;
+}
+
+export interface Ts_TupleType {
+  kind: "Ts_TupleType";
+  elts: Ts_TypeExpr[];
+  labels?: (string | undefined)[];
+}
+
+export interface Ts_UnionType {
+  kind: "Ts_UnionType";
+  types: Ts_TypeExpr[];
+}
+
+export interface Ts_IntersectionType {
+  kind: "Ts_IntersectionType";
+  types: Ts_TypeExpr[];
+}
+
+export interface Ts_FnType {
+  kind: "Ts_FnType";
+  typeParams?: Ts_TypeParam[];
+  params: Ts_Param[];
+  returnType: Ts_TypeExpr;
+}
+
+export interface Ts_TypeLit {
+  kind: "Ts_TypeLit";
+  members: Ts_TypeMember[];
+}
+
+export interface Ts_TypeMember {
+  name: string;
+  type?: Ts_TypeExpr;
+  optional?: boolean;
+  readonly?: boolean;
+  isMethod?: boolean;
+  params?: Ts_Param[];
+  returnType?: Ts_TypeExpr;
+  typeParams?: Ts_TypeParam[];
+  indexSignature?: { keyName: string; keyType: Ts_TypeExpr };
+}
+
+export interface Ts_ConditionalType {
+  kind: "Ts_ConditionalType";
+  checkType: Ts_TypeExpr;
+  extendsType: Ts_TypeExpr;
+  trueType: Ts_TypeExpr;
+  falseType: Ts_TypeExpr;
+}
+
+export interface Ts_MappedType {
+  kind: "Ts_MappedType";
+  typeParam: string;
+  constraint: Ts_TypeExpr;
+  nameType?: Ts_TypeExpr;
+  type: Ts_TypeExpr;
+  readonlyToken?: "+" | "-" | true;
+  optionalToken?: "+" | "-" | true;
+}
+
+export interface Ts_IndexedAccessType {
+  kind: "Ts_IndexedAccessType";
+  object: Ts_TypeExpr;
+  index: Ts_TypeExpr;
+}
+
+export interface Ts_LiteralType {
+  kind: "Ts_LiteralType";
+  value: string;
+  litKind: "string" | "number" | "boolean" | "null" | "undefined";
+}
+
+export interface Ts_TemplateLiteralType {
+  kind: "Ts_TemplateLiteralType";
+  parts: (string | Ts_TypeExpr)[];
+}
+
+export interface Ts_ParenType {
+  kind: "Ts_ParenType";
+  inner: Ts_TypeExpr;
+}
+
+export interface Ts_TypeofType {
+  kind: "Ts_TypeofType";
+  expr: IRExpr;
+}
+
+export interface Ts_KeyofType {
+  kind: "Ts_KeyofType";
+  type: Ts_TypeExpr;
+}
+
+export interface Ts_InferType {
+  kind: "Ts_InferType";
+  name: string;
+  constraint?: Ts_TypeExpr;
+}
+
+export interface Ts_TypePredicateExpr {
+  kind: "Ts_TypePredicateExpr";
+  paramName: string;
+  type: Ts_TypeExpr;
+  asserts?: boolean;
+}
+
+export interface Ts_InterfaceDecl {
+  kind: "Ts_InterfaceDecl";
+  name: string;
+  typeParams?: Ts_TypeParam[];
+  heritage?: Ts_TypeRef[];
+  members: Ts_TypeMember[];
+  isExported: boolean;
+  stmtIndex: number;
+}
+
+export interface Ts_TypeAliasDecl {
+  kind: "Ts_TypeAliasDecl";
+  name: string;
+  typeParams?: Ts_TypeParam[];
+  type: Ts_TypeExpr;
+  isExported: boolean;
+  stmtIndex: number;
+}
+
+export interface Ts_ClassDecl {
+  kind: "Ts_ClassDecl";
+  name: string;
+  typeParams?: Ts_TypeParam[];
+  superClass?: Ts_TypeRef;
+  implements?: Ts_TypeRef[];
+  members: Ts_ClassMember[];
+  isExported: boolean;
+  isAbstract: boolean;
+  isDefault: boolean;
+  decorators?: IRExpr[];
+  stmtIndex: number;
+}
+
+export type Ts_ClassMember =
+  | Ts_FieldDecl
+  | Ts_MethodDecl
+  | Ts_CtorDecl
+  | Ts_GetterDecl
+  | Ts_SetterDecl;
+
+export interface Ts_FieldDecl {
+  kind: "Ts_FieldDecl";
+  name: string;
+  type?: Ts_TypeExpr;
+  value?: IRExpr;
+  access?: "public" | "private" | "protected";
+  isStatic: boolean;
+  isReadonly: boolean;
+  optional?: boolean;
+  declare?: boolean;
+  decorators?: IRExpr[];
+}
+
+export interface Ts_MethodDecl {
+  kind: "Ts_MethodDecl";
+  name: string;
+  typeParams?: Ts_TypeParam[];
+  params: Ts_Param[];
+  returnType?: Ts_TypeExpr;
+  body?: Ts_BlockStmt;
+  access?: "public" | "private" | "protected";
+  isStatic: boolean;
+  isAsync: boolean;
+  isAbstract: boolean;
+  isGenerator: boolean;
+  isOverride: boolean;
+  decorators?: IRExpr[];
+}
+
+export interface Ts_CtorDecl {
+  kind: "Ts_CtorDecl";
+  params: Ts_Param[];
+  body: Ts_BlockStmt;
+  access?: "public" | "private" | "protected";
+}
+
+export interface Ts_GetterDecl {
+  kind: "Ts_GetterDecl";
+  name: string;
+  returnType?: Ts_TypeExpr;
+  body: Ts_BlockStmt;
+  access?: "public" | "private" | "protected";
+  isStatic: boolean;
+}
+
+export interface Ts_SetterDecl {
+  kind: "Ts_SetterDecl";
+  name: string;
+  param: Ts_Param;
+  body: Ts_BlockStmt;
+  access?: "public" | "private" | "protected";
+  isStatic: boolean;
+}
+
+export interface Ts_EnumDecl {
+  kind: "Ts_EnumDecl";
+  name: string;
+  members: { name: string; value?: IRExpr }[];
+  isConst: boolean;
+  isExported: boolean;
+  stmtIndex: number;
+}
+
+export interface Ts_NamespaceDecl {
+  kind: "Ts_NamespaceDecl";
+  name: string;
+  body: IRNode[];
+  isExported: boolean;
+  stmtIndex: number;
+}
+
+export interface Ts_FuncDecl {
+  kind: "Ts_FuncDecl";
+  name: string;
+  typeParams?: Ts_TypeParam[];
+  params: Ts_Param[];
+  returnType?: Ts_TypeExpr;
+  body?: Ts_BlockStmt;
+  isAsync: boolean;
+  isGenerator: boolean;
+  isExported: boolean;
+  isDefault: boolean;
+  declare?: boolean;
+  stmtIndex: number;
+}
+
+export interface Ts_VarStmt {
+  kind: "Ts_VarStmt";
+  keyword: "const" | "let" | "var";
+  declarations: Ts_VarDeclarator[];
+  isExported: boolean;
+  stmtIndex: number;
+}
+
+export interface Ts_VarDeclarator {
+  binding: IRExpr;
+  type?: Ts_TypeExpr;
+  value?: IRExpr;
+}
+
+export interface Ts_BlockStmt {
+  kind: "Ts_BlockStmt";
+  stmts: IRNode[];
+}
+
+export interface Ts_IfStmt {
+  kind: "Ts_IfStmt";
+  cond: IRExpr;
+  then: IRNode;
+  else_?: IRNode;
+  stmtIndex: number;
+}
+
+export interface Ts_ForStmt {
+  kind: "Ts_ForStmt";
+  init?: IRNode | IRExpr;
+  cond?: IRExpr;
+  update?: IRExpr;
+  body: IRNode;
+  stmtIndex: number;
+}
+
+export interface Ts_ForInStmt {
+  kind: "Ts_ForInStmt";
+  init: IRNode | IRExpr;
+  iter: IRExpr;
+  body: IRNode;
+  stmtIndex: number;
+}
+
+export interface Ts_ForOfStmt {
+  kind: "Ts_ForOfStmt";
+  init: IRNode | IRExpr;
+  iter: IRExpr;
+  body: IRNode;
+  isAwait: boolean;
+  stmtIndex: number;
+}
+
+export interface Ts_WhileStmt {
+  kind: "Ts_WhileStmt";
+  cond: IRExpr;
+  body: IRNode;
+  stmtIndex: number;
+}
+
+export interface Ts_DoWhileStmt {
+  kind: "Ts_DoWhileStmt";
+  cond: IRExpr;
+  body: IRNode;
+  stmtIndex: number;
+}
+
+export interface Ts_SwitchStmt {
+  kind: "Ts_SwitchStmt";
+  tag: IRExpr;
+  cases: Ts_SwitchCase[];
+  stmtIndex: number;
+}
+
+export interface Ts_SwitchCase {
+  value?: IRExpr;
+  body: IRNode[];
+}
+
+export interface Ts_TryStmt {
+  kind: "Ts_TryStmt";
+  tryBody: Ts_BlockStmt;
+  catchParam?: { name: string; type?: Ts_TypeExpr };
+  catchBody?: Ts_BlockStmt;
+  finallyBody?: Ts_BlockStmt;
+  stmtIndex: number;
+}
+
+export interface Ts_ThrowStmt {
+  kind: "Ts_ThrowStmt";
+  expr: IRExpr;
+  stmtIndex: number;
+}
+
+export interface Ts_ReturnStmt {
+  kind: "Ts_ReturnStmt";
+  value?: IRExpr;
+  stmtIndex: number;
+}
+
+export interface Ts_ExprStmt {
+  kind: "Ts_ExprStmt";
+  expr: IRExpr;
+  stmtIndex: number;
+}
+
+export interface Ts_BreakStmt {
+  kind: "Ts_BreakStmt";
+  label?: string;
+  stmtIndex: number;
+}
+
+export interface Ts_ContinueStmt {
+  kind: "Ts_ContinueStmt";
+  label?: string;
+  stmtIndex: number;
+}
+
+export interface Ts_LabeledStmt {
+  kind: "Ts_LabeledStmt";
+  label: string;
+  body: IRNode;
+  stmtIndex: number;
+}
+
+export interface Ts_ArrowFn {
+  kind: "Ts_ArrowFn";
+  typeParams?: Ts_TypeParam[];
+  params: Ts_Param[];
+  returnType?: Ts_TypeExpr;
+  body: IRExpr | Ts_BlockStmt;
+  isAsync: boolean;
+}
+
+export interface Ts_TemplateLit {
+  kind: "Ts_TemplateLit";
+  parts: (string | IRExpr)[];
+}
+
+export interface Ts_TaggedTemplate {
+  kind: "Ts_TaggedTemplate";
+  tag: IRExpr;
+  template: Ts_TemplateLit;
+}
+
+export interface Ts_TypeAssertion {
+  kind: "Ts_TypeAssertion";
+  type: Ts_TypeExpr;
+  expr: IRExpr;
+}
+
+export interface Ts_AsExpr {
+  kind: "Ts_AsExpr";
+  expr: IRExpr;
+  type: Ts_TypeExpr;
+  asConst?: boolean;
+}
+
+export interface Ts_SatisfiesExpr {
+  kind: "Ts_SatisfiesExpr";
+  expr: IRExpr;
+  type: Ts_TypeExpr;
+}
+
+export interface Ts_NonNullExpr {
+  kind: "Ts_NonNullExpr";
+  expr: IRExpr;
+}
+
+export interface Ts_ObjectLit {
+  kind: "Ts_ObjectLit";
+  properties: Ts_ObjectProperty[];
+}
+
+export type Ts_ObjectProperty =
+  | { kind: "property"; key: IRExpr; value: IRExpr; computed: boolean; shorthand: boolean }
+  | { kind: "method"; name: string; params: Ts_Param[]; returnType?: Ts_TypeExpr; body: Ts_BlockStmt; isAsync: boolean; isGenerator: boolean }
+  | { kind: "getter"; name: string; body: Ts_BlockStmt }
+  | { kind: "setter"; name: string; param: Ts_Param; body: Ts_BlockStmt }
+  | { kind: "spread"; value: IRExpr };
+
+export interface Ts_ArrayLit {
+  kind: "Ts_ArrayLit";
+  elements: (IRExpr | null)[];
+}
+
+export interface Ts_SpreadExpr {
+  kind: "Ts_SpreadExpr";
+  expr: IRExpr;
+}
+
+export interface Ts_AwaitExpr {
+  kind: "Ts_AwaitExpr";
+  expr: IRExpr;
+}
+
+export interface Ts_YieldExpr {
+  kind: "Ts_YieldExpr";
+  expr?: IRExpr;
+  delegate?: boolean;
+}
+
+export interface Ts_ConditionalExpr {
+  kind: "Ts_ConditionalExpr";
+  cond: IRExpr;
+  then: IRExpr;
+  else_: IRExpr;
+}
+
+export interface Ts_NewExpr {
+  kind: "Ts_NewExpr";
+  callee: IRExpr;
+  typeArgs?: Ts_TypeExpr[];
+  args: IRExpr[];
+}
+
+export interface Ts_RegexLit {
+  kind: "Ts_RegexLit";
+  pattern: string;
+  flags: string;
+}
+
+export interface Ts_JsxElement {
+  kind: "Ts_JsxElement";
+  tagName: string;
+  attributes: Ts_JsxAttribute[];
+  children: IRExpr[];
+  selfClosing: boolean;
+  typeArgs?: Ts_TypeExpr[];
+}
+
+export interface Ts_JsxSelfClose {
+  kind: "Ts_JsxSelfClose";
+  tagName: string;
+  attributes: Ts_JsxAttribute[];
+  typeArgs?: Ts_TypeExpr[];
+}
+
+export interface Ts_JsxFragment {
+  kind: "Ts_JsxFragment";
+  children: IRExpr[];
+}
+
+export interface Ts_JsxAttribute {
+  name: string;
+  value?: IRExpr;
+  spread?: boolean;
+}
+
+export interface Ts_JsxExpression {
+  kind: "Ts_JsxExpression";
+  expr: IRExpr;
+}
+
+export interface Ts_JsxText {
+  kind: "Ts_JsxText";
+  text: string;
+}
+

@@ -1,0 +1,2 @@
+!ts1
+bubbleSort(arr){:=result=[...arr];:=n=result.length;for :=i=0;i<n-1;i++{for :=j=0;j<n-i-1;j++{if result[j]>result[j+1]{:=tmp=result[j];result[j]=result[j+1];result[j+1]=tmp}}};^result};main(){:=data=[5,2,8,1,9,3,7,4,6];:=sorted=bubbleSort(data);pl(sorted.join(","))}

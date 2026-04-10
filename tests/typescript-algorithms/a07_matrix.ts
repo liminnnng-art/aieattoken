@@ -1,0 +1,28 @@
+function multiply(a: number[][], b: number[][]): number[][] {
+  const rows = a.length;
+  const cols = b[0].length;
+  const inner = b.length;
+  const result: number[][] = [];
+  for (let i = 0; i < rows; i++) {
+    result.push([]);
+    for (let j = 0; j < cols; j++) {
+      let sum = 0;
+      for (let k = 0; k < inner; k++) {
+        sum = sum + a[i][k] * b[k][j];
+      }
+      result[i].push(sum);
+    }
+  }
+  return result;
+}
+
+function main(): void {
+  const a = [[1, 2], [3, 4]];
+  const b = [[5, 6], [7, 8]];
+  const c = multiply(a, b);
+  for (const row of c) {
+    console.log(row.join(" "));
+  }
+}
+
+main();

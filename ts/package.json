@@ -1,7 +1,7 @@
 {
   "name": "aieattoken",
-  "version": "0.1.0",
-  "description": "AI-native token compression for Go, Java, and Python. Reduces LLM token usage by 30-55%.",
+  "version": "0.2.0",
+  "description": "AI-native token compression for Go, Java, Python, and TypeScript. Reduces LLM token usage by 30-55%.",
   "main": "dist/cli.js",
   "bin": {
     "aet": "dist/cli.js"
@@ -22,6 +22,7 @@
     "stdlib-aliases.json",
     "stdlib-aliases-java.json",
     "stdlib-aliases-python.json",
+    "stdlib-aliases-typescript.json",
     "popular-aliases-python.json",
     "scripts/",
     "README.md"
@@ -35,6 +36,7 @@
     "golang",
     "java",
     "python",
+    "typescript",
     "transpiler",
     "compression",
     "tokenizer",
@@ -53,10 +55,10 @@
   },
   "dependencies": {
     "@dqbd/tiktoken": "^1.0.22",
-    "chevrotain": "^12.0.0"
+    "chevrotain": "^12.0.0",
+    "typescript": "^6.0.2"
   },
   "devDependencies": {
-    "@types/node": "^25.5.2",
-    "typescript": "^6.0.2"
+    "@types/node": "^25.5.2"
   }
 }

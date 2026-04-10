@@ -1,0 +1,2 @@
+!ts1
+=Nullable<T>=T|null;=DeepReadonly<T>={![P in ko T]:T[P]:object?DeepReadonly<T[P]>:T[P]};=PickByType<T,U>={[K in ko T]:T[K]};=FirstArgument<F>=F:(arg,...args)->A?A:nv;=Awaitable<T>=T|Promise<T>;@ApiResponse<T>{data:T;status:n;headers:Record<s,s>;error?:s};=Method="GET"|"POST"|"PUT"|"DELETE"|"PATCH";@Request<B=uk>{method:Method;path:s;body?:B;params?:Record<s,s>};=Handler<Req,Res>=(req)->Promise<ApiResponse<Res>>

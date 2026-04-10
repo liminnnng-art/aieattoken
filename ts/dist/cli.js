@@ -8,16 +8,20 @@ import { fileURLToPath } from "url";
 import { parse } from "./parser/index.js";
 import { parseJava as parseJavaAET } from "./parser/java.js";
 import { parsePython as parsePythonAET } from "./parser/python.js";
+import { parseTypescriptAET } from "./parser/typescript.js";
 import { transform, loadAliases } from "./transformer/index.js";
 import { transformJava, loadJavaAliases } from "./transformer/java.js";
 import { transformPython, loadPythonAliases } from "./transformer/python.js";
+import { loadTypescriptAliases } from "./transformer/typescript.js";
 import { emit } from "./emitter/index.js";
 import { emit as emitJava } from "./emitter/java.js";
 import { emitPython } from "./emitter/python.js";
+import { emitTypescript } from "./emitter/typescript.js";
 import { astDiff, formatDiff } from "./ast-diff/index.js";
 import { parseGoFile, goAstToIR, irToAET, loadReverseAliases } from "./reverse/index.js";
 import { parseJavaFile, javaAstToIR, javaIrToAET, javaIrToAETJ, loadJavaReverseAliases } from "./reverse/java.js";
 import { parsePythonFile, pythonAstToIR, pythonIrToAETP, loadPythonReverseAliases } from "./reverse/python.js";
+import { parseTypescriptFile, typescriptToAET, loadTypescriptReverseAliases } from "./reverse/typescript.js";
 // Resolve paths relative to this package (works for global npm install)
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -45,6 +49,14 @@ function findPythonAliases() {
         resolve(projectRoot, "stdlib-aliases-python.json"),
         resolve(pkgRoot, "stdlib-aliases-python.json"),
         resolve(process.cwd(), "stdlib-aliases-python.json"),
+    ];
+    return candidates.find(p => existsSync(p));
+}
+function findTypescriptAliases() {
+    const candidates = [
+        resolve(projectRoot, "stdlib-aliases-typescript.json"),
+        resolve(pkgRoot, "stdlib-aliases-typescript.json"),
+        resolve(process.cwd(), "stdlib-aliases-typescript.json"),
     ];
     return candidates.find(p => existsSync(p));
 }
@@ -82,28 +94,35 @@ if (pythonAliasPath) {
     loadPythonAliases(pythonAliasPath);
     loadPythonReverseAliases(pythonAliasPath);
 }
+const typescriptAliasPath = findTypescriptAliases();
+if (typescriptAliasPath) {
+    loadTypescriptAliases(typescriptAliasPath);
+    loadTypescriptReverseAliases(typescriptAliasPath);
+}
 const args = process.argv.slice(2);
 const command = args[0];
 const VERSION = "0.2.0";
 function usage() {
-    console.log(`aieattoken v${VERSION} — Compress Go/Java/Python code for AI token efficiency
+    console.log(`aieattoken v${VERSION} — Compress Go/Java/Python/TypeScript code for AI token efficiency
 
 Usage:
-  aet convert <file.go|.java|.py>    Go/Java/Python → AET/AETJ/AETP (auto-detect)
-  aet convert <file> -o <out>        Go/Java/Python → AET/AETJ/AETP (custom output)
+  aet convert <file>                 Source → AET (auto-detect by ext)
+                                     .go → .aet, .java → .aetj, .py → .aetp,
+                                     .ts → .aets, .tsx → .aetx
+  aet convert <file> -o <out>        Custom output path
   aet build <file.aet>               AET → Go → compile (produces binary)
-  aet build <file.aet> -o <out>      AET → Go → compile (custom binary name)
-  aet stats <file.go|.java|.py>      Show token savings analysis
+  aet stats <file>                   Show token savings analysis
   aet watch <dir>                    Watch directory, auto-convert .go/.java → .aet
-  aet compile <file.aet|.aetj|.aetp> AET → Go, AETJ → Java, AETP → Python (stdout)
-  aet compile <file.aet> --java      AET → Java source (stdout)
+  aet compile <file>                 AET variant → source (stdout)
+  aet compile <file.aet> --java      AET → Java source
   aet compile <file.aetp> --typed    AETP → Python with type hints
-  aet compile <file.aet|.aetj|.aetp> -o f  Write compiled output to file
-  aet diff <f1.aet|.aetp> <f2>      AST diff between two AET files
+  aet compile <file.aets> --typed    AETS → TypeScript with type annotations
+  aet compile <file> -o <out>        Write compiled output to file
+  aet diff <f1> <f2>                 AST diff between two AET files
 
 Options:
-  --java                             Target Java output (for compile command)
-  --typed                            Emit Python type annotations (for .aetp compile)
+  --java                             Target Java output
+  --typed                            Restore type annotations (Python / TypeScript)
   --version, -v                      Show version
   --help, -h                         Show this help`);
 }
@@ -163,17 +182,24 @@ function cmdConvert() {
     else if (ext === ".py") {
         aet = convertPythonToAETP(absPath, sourceCode);
     }
+    else if (ext === ".ts" || ext === ".tsx") {
+        aet = convertTypescriptToAET(absPath, sourceCode);
+    }
     else {
-        console.error(`Unsupported file type: ${ext} (expected .go, .java, or .py)`);
+        console.error(`Unsupported file type: ${ext} (expected .go, .java, .py, .ts, or .tsx)`);
         process.exit(1);
     }
     if (!aet)
         process.exit(1);
     const outIdx = args.indexOf("-o");
-    const defaultExt = ext === ".java" ? ".aetj" : ext === ".py" ? ".aetp" : ".aet";
+    const defaultExt = ext === ".java" ? ".aetj" :
+        ext === ".py" ? ".aetp" :
+            ext === ".tsx" ? ".aetx" :
+                ext === ".ts" ? ".aets" :
+                    ".aet";
     const outPath = outIdx !== -1 && args[outIdx + 1]
         ? resolve(args[outIdx + 1])
-        : absPath.replace(/\.(go|java|py)$/, defaultExt);
+        : absPath.replace(/\.(go|java|py|ts|tsx)$/, defaultExt);
     writeFileSync(outPath, aet);
     console.log(`Converted: ${basename(absPath)} → ${basename(outPath)}`);
     // Show token stats
@@ -231,13 +257,16 @@ function cmdStats() {
     const ext = extname(absPath).toLowerCase();
     const sourceCode = readFileSync(absPath, "utf-8");
     const srcTokens = countTokensSync(sourceCode);
-    // Convert to AET/AETJ/AETP
+    // Convert to AET/AETJ/AETP/AETS/AETX
     let aet;
     if (ext === ".java") {
         aet = convertJavaToAETJ(absPath, sourceCode);
     }
     else if (ext === ".py") {
         aet = convertPythonToAETP(absPath, sourceCode);
+    }
+    else if (ext === ".ts" || ext === ".tsx") {
+        aet = convertTypescriptToAET(absPath, sourceCode);
     }
     else {
         aet = convertGoToAET(absPath, sourceCode);
@@ -247,7 +276,11 @@ function cmdStats() {
         process.exit(1);
     }
     const aetTokens = countTokensSync(aet);
-    const lang = ext === ".java" ? "Java" : ext === ".py" ? "Python" : "Go";
+    const lang = ext === ".java" ? "Java" :
+        ext === ".py" ? "Python" :
+            ext === ".ts" ? "TS" :
+                ext === ".tsx" ? "TSX" :
+                    "Go";
     const savings = ((1 - aetTokens / srcTokens) * 100).toFixed(1);
     const saved = srcTokens - aetTokens;
     // Display stats
@@ -305,17 +338,27 @@ function cmdWatch() {
 function cmdCompile() {
     const file = args[1];
     if (!file) {
-        console.error("Usage: aet compile <file.aet|.aetj|.aetp> [--java] [--typed]");
+        console.error("Usage: aet compile <file.aet|.aetj|.aetp|.aets|.aetx> [--java] [--typed]");
         process.exit(1);
     }
     const code = readFileSync(resolve(file), "utf-8");
     const ext = extname(file).toLowerCase();
     const isAETJ = ext === ".aetj" || code.startsWith("!java-v");
     const isAETP = ext === ".aetp" || code.startsWith("!py-v");
+    const isAETS = ext === ".aets" || code.startsWith("!ts1") || code.startsWith("!ts-v");
+    const isAETX = ext === ".aetx" || code.startsWith("!tsx1") || code.startsWith("!tsx-v");
     const targetJava = args.includes("--java") || isAETJ;
     const targetTyped = args.includes("--typed");
     let output;
-    if (isAETP) {
+    if (isAETS || isAETX) {
+        const ir = compileAETSToIR(code);
+        if (ir.error) {
+            console.error(ir.error);
+            process.exit(1);
+        }
+        output = emitTypescript(ir.ir, { typed: targetTyped, jsx: isAETX });
+    }
+    else if (isAETP) {
         // AET-Python → Python
         const ir = compileAETPToIR(code);
         if (ir.error) {
@@ -389,6 +432,8 @@ function fileToIR(file, code) {
         return compileAETPToIR(code);
     if (ext === ".aetj" || code.startsWith("!java-v"))
         return compileAETJToIR(code);
+    if (ext === ".aets" || ext === ".aetx" || code.startsWith("!ts1") || code.startsWith("!tsx1") || code.startsWith("!ts-v") || code.startsWith("!tsx-v"))
+        return compileAETSToIR(code);
     return compileToIR(code);
 }
 // ============= CORE FUNCTIONS =============
@@ -475,6 +520,27 @@ function convertPythonToAETP(pyFilePath, _pyCode) {
         }
         return null;
     }
+}
+function convertTypescriptToAET(tsFilePath, _tsCode) {
+    try {
+        const tsAst = parseTypescriptFile(tsFilePath);
+        const isJsx = tsFilePath.endsWith(".tsx") || tsFilePath.endsWith(".jsx");
+        const targetTyped = args.includes("--typed");
+        return typescriptToAET(tsAst, { jsx: isJsx, typed: targetTyped });
+    }
+    catch (e) {
+        console.error(`TypeScript conversion error: ${e.message}`);
+        return null;
+    }
+}
+function compileAETSToIR(code) {
+    const parseResult = parseTypescriptAET(code);
+    if (parseResult.errors.length > 0) {
+        return { error: `AET-TS parse error: ${parseResult.errors.join("; ")}` };
+    }
+    if (!parseResult.ir)
+        return { error: "No IR produced" };
+    return { ir: parseResult.ir };
 }
 function compileAET(code) {
     const ir = compileToIR(code);
