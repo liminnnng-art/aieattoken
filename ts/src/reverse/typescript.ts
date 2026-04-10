@@ -339,7 +339,12 @@ function emitClassMember(member: ts.ClassElement, ctx: Ctx): string {
   }
   if (ts.isConstructorDeclaration(member)) {
     const params = emitParamList(member.parameters, ctx, /*ctor*/ true);
-    const body = member.body ? emitBlock(member.body, ctx) : "{}";
+    // Drop `{}` when the constructor body is empty (happens often with TS
+    // parameter properties: `constructor(private x: T) {}`).
+    if (!member.body || member.body.statements.length === 0) {
+      return `init${params}`;
+    }
+    const body = emitBlock(member.body, ctx);
     return `init${params}${body}`;
   }
   if (ts.isGetAccessorDeclaration(member)) {
@@ -1171,7 +1176,8 @@ function emitTypeMember(m: ts.TypeElement, ctx: Ctx): string {
     const name = propertyName(m.name);
     const tp = emitTypeParams(m.typeParameters, ctx);
     const params = emitParamList(m.parameters, ctx);
-    const rt = m.type ? "->" + emitTypeNode(m.type, ctx) : "";
+    // Drop `->v` (void return type) — it's the default when omitted.
+    const rt = (m.type && m.type.kind !== ts.SyntaxKind.VoidKeyword) ? "->" + emitTypeNode(m.type, ctx) : "";
     return `${name}${tp}${params}${rt}`;
   }
   if (ts.isIndexSignatureDeclaration(m)) {
