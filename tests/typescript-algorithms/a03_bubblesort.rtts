@@ -1,6 +1,5 @@
 function bubbleSort(arr) {
-  const result = [...arr];
-  const n = result.length;
+  const result = [...arr], n = result.length;
   for (let i = 0; i < n - 1; i++) {
     for (let j = 0; j < n - i - 1; j++) {
       if (result[j] > result[j + 1]) {
@@ -14,8 +13,7 @@ function bubbleSort(arr) {
 }
 
 function main() {
-  const data = [5, 2, 8, 1, 9, 3, 7, 4, 6];
-  const sorted = bubbleSort(data);
+  const data = [5, 2, 8, 1, 9, 3, 7, 4, 6], sorted = bubbleSort(data);
   console.log(sorted.join(","));
 }
 

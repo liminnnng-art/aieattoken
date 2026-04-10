@@ -21,8 +21,7 @@ class PostRepository {
     return this.ctx.db.get(id);
   }
   async create(data) {
-    const id = this.ctx.db.size + 1;
-    const post = { ...data, id };
+    const id = this.ctx.db.size + 1, post = { ...data, id };
     this.ctx.db.set(id, post);
     this.ctx.log("created " + id);
     return post;

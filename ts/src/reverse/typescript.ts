@@ -158,9 +158,30 @@ export function typescriptToAET(
     filteredStmts.push(stmt);
   }
 
-  for (const stmt of filteredStmts) {
+  // Top-level loop with consecutive-var merging.
+  let si = 0;
+  while (si < filteredStmts.length) {
+    const stmt = filteredStmts[si];
+    if (ts.isVariableStatement(stmt) && canMergeVarStmt(stmt, ctx)) {
+      const keyword = getVarKeyword(stmt);
+      let j = si + 1;
+      const group: ts.VariableStatement[] = [stmt];
+      while (j < filteredStmts.length) {
+        const next = filteredStmts[j];
+        if (ts.isVariableStatement(next) && canMergeVarStmt(next, ctx) && getVarKeyword(next) === keyword) {
+          group.push(next);
+          j++;
+        } else break;
+      }
+      if (group.length > 1) {
+        declParts.push(emitMergedVarStmts(group, keyword, ctx));
+        si = j;
+        continue;
+      }
+    }
     const emitted = emitTopLevelStmt(stmt, ctx);
     if (emitted !== null) declParts.push(emitted);
+    si++;
   }
 
   for (const r of required) parts.push(r);
@@ -460,8 +481,79 @@ function emitStmt(stmt: ts.Statement, ctx: Ctx): string {
 }
 
 function emitBlock(block: ts.Block, ctx: Ctx): string {
-  const stmts = block.statements.map(s => emitStmt(s, ctx)).filter(s => s.length > 0);
-  return "{" + stmts.join(";") + "}";
+  return "{" + emitStmtSequence(block.statements, ctx) + "}";
+}
+
+// Emit a sequence of statements with consecutive-var merging: adjacent
+// `const`/`let`/`var` declarations with the same keyword and no type
+// annotations are merged into a single multi-declarator form. This saves
+// one `;:=` or `;let` per merge.
+function emitStmtSequence(stmts: readonly ts.Statement[], ctx: Ctx): string {
+  const out: string[] = [];
+  let i = 0;
+  while (i < stmts.length) {
+    const stmt = stmts[i];
+    if (ts.isVariableStatement(stmt) && canMergeVarStmt(stmt, ctx)) {
+      // Collect consecutive mergeable VariableStatements with the same keyword
+      const keyword = getVarKeyword(stmt);
+      let j = i + 1;
+      const group: ts.VariableStatement[] = [stmt];
+      while (j < stmts.length) {
+        const next = stmts[j];
+        if (ts.isVariableStatement(next) && canMergeVarStmt(next, ctx) && getVarKeyword(next) === keyword) {
+          group.push(next);
+          j++;
+        } else break;
+      }
+      if (group.length === 1) {
+        out.push(emitStmt(stmt, ctx));
+      } else {
+        out.push(emitMergedVarStmts(group, keyword, ctx));
+      }
+      i = j;
+      continue;
+    }
+    const text = emitStmt(stmt, ctx);
+    if (text.length > 0) out.push(text);
+    i++;
+  }
+  return out.join(";");
+}
+
+function canMergeVarStmt(stmt: ts.VariableStatement, ctx: Ctx): boolean {
+  // Only merge when no decorators, no export modifier, and each declarator has no type annotation.
+  const mods = (stmt as any).modifiers as ts.NodeArray<ts.ModifierLike> | undefined;
+  if (mods && mods.some(m => m.kind === ts.SyntaxKind.ExportKeyword || m.kind === ts.SyntaxKind.DeclareKeyword)) return false;
+  for (const d of stmt.declarationList.declarations) {
+    if (d.type && ctx.typed) return false; // keep separate when types are on
+  }
+  return true;
+}
+
+function getVarKeyword(stmt: ts.VariableStatement): "const" | "let" | "var" {
+  const flags = stmt.declarationList.flags;
+  if (flags & ts.NodeFlags.Const) return "const";
+  if (flags & ts.NodeFlags.Let) return "let";
+  return "var";
+}
+
+function emitMergedVarStmts(stmts: ts.VariableStatement[], keyword: "const" | "let" | "var", ctx: Ctx): string {
+  const decls: string[] = [];
+  for (const stmt of stmts) {
+    for (const d of stmt.declarationList.declarations) {
+      const binding = emitBinding(d.name, ctx);
+      const type = (ctx.typed && d.type) ? ":" + emitTypeNode(d.type, ctx) : "";
+      const init = d.initializer ? "=" + emitExpr(d.initializer, ctx) : "";
+      decls.push(`${binding}${type}${init}`);
+    }
+  }
+  const prefix = keyword === "const" ? ":=" : keyword === "let" ? "let " : "var ";
+  // For `const`, the first binding uses `:=binding`, subsequent use `,binding`.
+  // For `let`/`var`, use `let binding1,binding2,...`.
+  if (keyword === "const") {
+    return `:=${decls.join(",")}`;
+  }
+  return `${prefix}${decls.join(",")}`;
 }
 
 function wrapBlock(stmt: ts.Statement, ctx: Ctx): string {
@@ -480,6 +572,11 @@ function emitIf(node: ts.IfStatement, ctx: Ctx): string {
 }
 
 function emitFor(node: ts.ForStatement, ctx: Ctx): string {
+  // Try to detect the range-for pattern: for (let i = <start>; i < <end>; i++) { ... }
+  // which compresses to `for i:=<start>..<end> { ... }`.
+  const rangeForm = tryEmitRangeFor(node, ctx);
+  if (rangeForm) return rangeForm;
+
   let init = "";
   if (node.initializer) {
     if (ts.isVariableDeclarationList(node.initializer)) {
@@ -497,6 +594,41 @@ function emitFor(node: ts.ForStatement, ctx: Ctx): string {
   const cond = node.condition ? emitExpr(node.condition, ctx) : "";
   const upd = node.incrementor ? emitExpr(node.incrementor, ctx) : "";
   return `for ${init};${cond};${upd}${wrapBlock(node.statement, ctx)}`;
+}
+
+// Detect `for (let i = start; i < end; i++)` or with `<=` and emit a range form.
+// Only supports increment-by-1 (i++), simple ident loop variable.
+function tryEmitRangeFor(node: ts.ForStatement, ctx: Ctx): string | null {
+  const init = node.initializer;
+  if (!init || !ts.isVariableDeclarationList(init)) return null;
+  if (init.declarations.length !== 1) return null;
+  const decl = init.declarations[0];
+  if (!ts.isIdentifier(decl.name)) return null;
+  const loopVar = decl.name.text;
+  if (!decl.initializer) return null;
+  const startExpr = decl.initializer;
+
+  const cond = node.condition;
+  if (!cond || !ts.isBinaryExpression(cond)) return null;
+  // cond must be `i < end` or `i <= end` where the LHS is the loop var
+  if (!ts.isIdentifier(cond.left) || cond.left.text !== loopVar) return null;
+  const op = cond.operatorToken.kind;
+  if (op !== ts.SyntaxKind.LessThanToken && op !== ts.SyntaxKind.LessThanEqualsToken) return null;
+  const endExpr = cond.right;
+
+  const upd = node.incrementor;
+  if (!upd) return null;
+  // upd must be `i++` or `++i`
+  const isPostInc = ts.isPostfixUnaryExpression(upd) && upd.operator === ts.SyntaxKind.PlusPlusToken
+    && ts.isIdentifier(upd.operand) && upd.operand.text === loopVar;
+  const isPreInc = ts.isPrefixUnaryExpression(upd) && upd.operator === ts.SyntaxKind.PlusPlusToken
+    && ts.isIdentifier(upd.operand) && upd.operand.text === loopVar;
+  if (!isPostInc && !isPreInc) return null;
+
+  const startText = emitExpr(startExpr, ctx);
+  const endText = emitExpr(endExpr, ctx);
+  const rangeOp = op === ts.SyntaxKind.LessThanToken ? ".." : "..="; // .. exclusive, ..= inclusive
+  return `for ${loopVar}:=${startText}${rangeOp}${endText}${wrapBlock(node.statement, ctx)}`;
 }
 
 function emitForOf(node: ts.ForOfStatement, ctx: Ctx): string {

@@ -1,8 +1,5 @@
 function multiply(a, b) {
-  const rows = a.length;
-  const cols = b[0].length;
-  const inner = b.length;
-  const result = [];
+  const rows = a.length, cols = b[0].length, inner = b.length, result = [];
   for (let i = 0; i < rows; i++) {
     result.push([]);
     for (let j = 0; j < cols; j++) {
@@ -17,9 +14,7 @@ function multiply(a, b) {
 }
 
 function main() {
-  const a = [[1, 2], [3, 4]];
-  const b = [[5, 6], [7, 8]];
-  const c = multiply(a, b);
+  const a = [[1, 2], [3, 4]], b = [[5, 6], [7, 8]], c = multiply(a, b);
   for (const row of c) {
     console.log(row.join(" "));
   }

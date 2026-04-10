@@ -26,9 +26,9 @@ interface Tok {
 const PUNCT_MULTI = [
   ">>>=",
   "===", "!==", "**=", "<<=", ">>=", ">>>", "&&=", "||=", "??=",
-  "...", "?.", "??", "=>", "->", "<=", ">=", "==", "!=",
+  "...", "..=", "?.", "??", "=>", "->", "<=", ">=", "==", "!=",
   "<<", ">>", "+=", "-=", "*=", "/=", "%=", "&=", "|=", "^=",
-  "&&", "||", "++", "--", "**", ":=",
+  "&&", "||", "++", "--", "**", ":=", "..",
 ];
 
 const KEYWORDS = new Set([
@@ -148,7 +148,15 @@ class Lexer {
       this.pos++;
       while (this.pos < this.src.length) {
         const cc2 = this.src.charCodeAt(this.pos);
-        if ((cc2 >= 48 && cc2 <= 57) || cc2 === 46 || cc2 === 101 || cc2 === 69 || cc2 === 43 || cc2 === 45 || cc2 === 120 || cc2 === 95
+        // `.` is only part of the number if the next char is a digit (decimal point).
+        // If the next char is another `.`, it's the start of a `..` / `..=` range operator.
+        if (cc2 === 46) {
+          const cc3 = this.src.charCodeAt(this.pos + 1);
+          if (cc3 === 46) break; // `..` follows — stop the number here
+          this.pos++;
+          continue;
+        }
+        if ((cc2 >= 48 && cc2 <= 57) || cc2 === 101 || cc2 === 69 || cc2 === 120 || cc2 === 95
           || (cc2 >= 97 && cc2 <= 102) || (cc2 >= 65 && cc2 <= 70)) {
           this.pos++;
         } else break;
@@ -1499,14 +1507,55 @@ class Parser {
 
   private parseForStmt(): IR.IRNode {
     this.eat("ident", "for");
+
+    // Range-for shortcut: `for IDENT:=start..end{...}` or `for IDENT:=start..=end{...}`.
+    // Detected before general init parsing; falls through if the pattern doesn't match.
+    if (this.match("ident") && this.peek(1).kind === "punct" && this.peek(1).value === ":=") {
+      const savePos = this.pos;
+      const loopVar = this.advance().value;
+      this.advance(); // consume :=
+      const start = this.parseRangeBoundExpr();
+      if (this.match("punct", "..") || this.match("punct", "..=")) {
+        const op = this.advance().value;
+        const end = this.parseExpr();
+        const body = this.parseBlockStmt();
+        const initVar: IR.Ts_VarStmt = {
+          kind: "Ts_VarStmt",
+          keyword: "let",
+          declarations: [{ binding: { kind: "Ident", name: loopVar } as IR.IRIdent, value: start }],
+          isExported: false,
+          stmtIndex: this.nextIdx(),
+        };
+        const cmpOp = op === "..=" ? "<=" : "<";
+        const cond: IR.IRBinaryExpr = {
+          kind: "BinaryExpr",
+          left: { kind: "Ident", name: loopVar } as IR.IRIdent,
+          op: cmpOp,
+          right: end,
+        };
+        const update: IR.IRUnaryExpr = {
+          kind: "UnaryExpr",
+          op: "++_post",
+          x: { kind: "Ident", name: loopVar } as IR.IRIdent,
+        };
+        return {
+          kind: "Ts_ForStmt",
+          init: initVar,
+          cond,
+          update,
+          body,
+          stmtIndex: this.nextIdx(),
+        } as IR.Ts_ForStmt;
+      }
+      this.pos = savePos;
+    }
+
     // for await a of b  |  for a of b  |  for a in b  |  for init;cond;upd
     let isAwait = false;
     if (this.match("ident", "a") && this.peek(1).kind === "ident") {
       this.advance();
       isAwait = true;
     }
-    // Save position for possible backtrack
-    const save = this.pos;
     // Try to read init, then check for 'of' or 'in'
     let init: IR.IRNode | IR.IRExpr;
     if (this.match("punct", ":=")) {
@@ -1544,13 +1593,11 @@ class Parser {
     }
 
     // C-style for
-    // If init is a VarStmt with no value, try to consume initializer.
     if ((init as any).kind === "Ts_VarStmt") {
       const v = init as IR.Ts_VarStmt;
       if (this.tryEat("punct", "=")) {
         v.declarations[0].value = this.parseExpr();
       }
-      // C-style for loop var is typically mutable (i++), so use `let` instead of `const`
       v.keyword = "let";
     }
     this.eat("punct", ";");
@@ -1568,6 +1615,11 @@ class Parser {
       body,
       stmtIndex: this.nextIdx(),
     } as IR.Ts_ForStmt;
+  }
+
+  // Parse a range-bound expression: stops at `..` or `..=` without consuming them.
+  private parseRangeBoundExpr(): IR.IRExpr {
+    return this.parseLogicalOr();
   }
 
   private parseWhileStmt(): IR.Ts_WhileStmt {

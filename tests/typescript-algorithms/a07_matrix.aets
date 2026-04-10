@@ -1,2 +1,2 @@
 !ts1
-multiply(a,b){:=rows=a.length;:=cols=b[0].length;:=inner=b.length;:=result=[];for :=i=0;i<rows;i++{result.push([]);for :=j=0;j<cols;j++{let sum=0;for :=k=0;k<inner;k++{sum=sum+a[i][k]*b[k][j]};result[i].push(sum)}};^result};main(){:=a=[[1,2],[3,4]];:=b=[[5,6],[7,8]];:=c=multiply(a,b);for :=row of c{pl(row.join(" "))}}
+multiply(a,b){:=rows=a.length,cols=b[0].length,inner=b.length,result=[];for i:=0..rows{result.push([]);for j:=0..cols{let sum=0;for k:=0..inner{sum=sum+a[i][k]*b[k][j]};result[i].push(sum)}};^result};main(){:=a=[[1,2],[3,4]],b=[[5,6],[7,8]],c=multiply(a,b);for :=row of c{pl(row.join(" "))}}

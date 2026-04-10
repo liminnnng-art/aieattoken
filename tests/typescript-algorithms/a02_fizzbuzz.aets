@@ -1,2 +1,2 @@
 !ts1
-fizzbuzz(n){if n%15===0{^"FizzBuzz"};if n%3===0{^"Fizz"};if n%5===0{^"Buzz"};^String(n)};main(){for :=i=1;i<=30;i++{pl(fizzbuzz(i))}}
+fizzbuzz(n){if n%15===0{^"FizzBuzz"};if n%3===0{^"Fizz"};if n%5===0{^"Buzz"};^String(n)};main(){for i:=1..=30{pl(fizzbuzz(i))}}

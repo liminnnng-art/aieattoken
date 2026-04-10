@@ -1,7 +1,6 @@
 function isPalindrome(s) {
   const cleaned = s.toLowerCase().replace(/[^a-z0-9]/g, "");
-  let lo = 0;
-  let hi = cleaned.length - 1;
+  let lo = 0, hi = cleaned.length - 1;
   while (lo < hi) {
     if (cleaned[lo] !== cleaned[hi]) {
       return false;
