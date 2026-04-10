@@ -38,11 +38,11 @@ Token counts measured with cl100k_base (GPT-4 / Claude tokenizer).
 
 | Benchmark | Files | Avg Savings |
 |-----------|-------|-------------|
-| Algorithms | 7 | **29.4%** |
-| React components | 2 | **25.5%** |
-| Backend services | 2 | **38.2%** |
-| Utility types | 1 | **24.3%** |
-| Overall | 12 | **30.5%** |
+| Algorithms | 7 | **36.6%** |
+| React components | 2 | **30.6%** |
+| Backend services | 2 | **40.1%** |
+| Utility types | 1 | **24.8%** |
+| Overall | 12 | **35.2%** |
 
 ## Install
 
