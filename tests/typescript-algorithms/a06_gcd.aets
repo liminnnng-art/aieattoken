@@ -1,2 +1,2 @@
 !ts1
-gcd(a,b){while b!==0{:=t=b;b=a%b;a=t};^a};lcm(a,b){^(a*b)/gcd(a,b)};main(){pl(gcd(48,18));pl(lcm(12,18))}
+gcd(a,b){while b!==0{:=t=b;b=a%b;a=t};^a};lcm(a,b)=>(a*b)/gcd(a,b);main(){pl(gcd(48,18));pl(lcm(12,18))}

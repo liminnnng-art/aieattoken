@@ -562,14 +562,16 @@ class Parser {
     if (this.peek(p).kind === "punct" && this.peek(p).value === "->") {
       // skip the type
       p++;
-      // Simple heuristic: advance until { or ;
+      // Simple heuristic: advance until { or ; or =>
       while (p < this.toks.length - this.pos) {
         const ch = this.peek(p);
-        if (ch.kind === "punct" && (ch.value === "{" || ch.value === ";")) break;
+        if (ch.kind === "punct" && (ch.value === "{" || ch.value === ";" || ch.value === "=>")) break;
         if (ch.kind === "eof") return false;
         p++;
       }
     }
+    // Accept `=>` for expression-body shorthand: `name(params)=>expr`
+    if (this.peek(p).kind === "punct" && this.peek(p).value === "=>") return true;
     // Expect { for function body
     return this.peek(p).kind === "punct" && this.peek(p).value === "{";
   }
@@ -884,8 +886,16 @@ class Parser {
       let returnType: IR.Ts_TypeExpr | undefined;
       if (this.tryEat("punct", "->")) returnType = this.parseTypeExpr();
       let body: IR.Ts_BlockStmt | undefined;
-      if (this.match("punct", "{")) {
+      // Expression-body shorthand: name()=>expr
+      if (this.tryEat("punct", "=>")) {
+        const expr = this.parseExpr();
+        body = {
+          kind: "Ts_BlockStmt",
+          stmts: [{ kind: "Ts_ReturnStmt", value: expr, stmtIndex: this.nextIdx() } as IR.Ts_ReturnStmt],
+        };
+      } else if (this.match("punct", "{")) {
         body = this.parseBlockStmt();
+        maybeWrapImplicitReturn(body);
       }
       return {
         kind: "Ts_MethodDecl",
@@ -998,7 +1008,20 @@ class Parser {
     const params = this.parseTsParamList();
     let returnType: IR.Ts_TypeExpr | undefined;
     if (this.tryEat("punct", "->")) returnType = this.parseTypeExpr();
-    const body = this.parseBlockStmt();
+
+    let body: IR.Ts_BlockStmt;
+    // Expression-body shorthand: name(params)=>expr
+    if (this.tryEat("punct", "=>")) {
+      const expr = this.parseExpr();
+      body = {
+        kind: "Ts_BlockStmt",
+        stmts: [{ kind: "Ts_ReturnStmt", value: expr, stmtIndex: this.nextIdx() } as IR.Ts_ReturnStmt],
+      };
+    } else {
+      body = this.parseBlockStmt();
+      // Implicit-last-return: if the body ends in an ExprStmt AND contains any `^` elsewhere, wrap the last stmt.
+      maybeWrapImplicitReturn(body);
+    }
     return {
       kind: "Ts_FuncDecl",
       name,
@@ -2378,6 +2401,55 @@ class Parser {
 // ---------------------------------------------------------------------------
 // Template literal parsing (convert raw `...${expr}...` text to Ts_TemplateLit)
 // ---------------------------------------------------------------------------
+
+// If the block ends in an ExprStmt AND contains at least one explicit
+// return statement elsewhere, wrap the trailing ExprStmt in a ReturnStmt.
+// This implements R4's implicit-last-return rule: the presence of another
+// `^` in the body signals that this function is value-returning, so its
+// trailing expression is the return value.
+function maybeWrapImplicitReturn(body: IR.Ts_BlockStmt): void {
+  if (body.stmts.length === 0) return;
+  const last = body.stmts[body.stmts.length - 1];
+  if (last.kind !== "Ts_ExprStmt") return;
+  // Scan the other statements for any ReturnStmt.
+  const hasReturnElsewhere = body.stmts.slice(0, -1).some(s => containsReturnStmt(s));
+  if (!hasReturnElsewhere) return;
+  const expr = (last as IR.Ts_ExprStmt).expr;
+  body.stmts[body.stmts.length - 1] = {
+    kind: "Ts_ReturnStmt",
+    value: expr,
+    stmtIndex: (last as any).stmtIndex ?? 0,
+  } as IR.Ts_ReturnStmt;
+}
+
+function containsReturnStmt(node: IR.IRNode | IR.IRExprStmt): boolean {
+  if (!node) return false;
+  if (node.kind === "Ts_ReturnStmt") return true;
+  // Stop at nested function boundaries — nested declarations don't count.
+  if (node.kind === "Ts_FuncDecl" || node.kind === "FuncDecl") return false;
+  // Recurse into common statement shapes.
+  if (node.kind === "Ts_BlockStmt") {
+    return (node as IR.Ts_BlockStmt).stmts.some(s => containsReturnStmt(s));
+  }
+  if (node.kind === "Ts_IfStmt") {
+    const s = node as IR.Ts_IfStmt;
+    return containsReturnStmt(s.then) || (s.else_ ? containsReturnStmt(s.else_) : false);
+  }
+  if (node.kind === "Ts_ForStmt" || node.kind === "Ts_ForInStmt" || node.kind === "Ts_ForOfStmt"
+      || node.kind === "Ts_WhileStmt" || node.kind === "Ts_DoWhileStmt") {
+    return containsReturnStmt((node as any).body);
+  }
+  if (node.kind === "Ts_SwitchStmt") {
+    const sw = node as IR.Ts_SwitchStmt;
+    return sw.cases.some(c => c.body.some(s => containsReturnStmt(s)));
+  }
+  if (node.kind === "Ts_TryStmt") {
+    const t = node as IR.Ts_TryStmt;
+    return containsReturnStmt(t.tryBody) || (t.catchBody ? containsReturnStmt(t.catchBody) : false) || (t.finallyBody ? containsReturnStmt(t.finallyBody) : false);
+  }
+  if (node.kind === "Ts_LabeledStmt") return containsReturnStmt((node as IR.Ts_LabeledStmt).body);
+  return false;
+}
 
 function parseTemplateLiteral(raw: string): IR.Ts_TemplateLit {
   // raw starts and ends with `

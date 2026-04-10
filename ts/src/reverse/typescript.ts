@@ -326,11 +326,15 @@ function emitClassMember(member: ts.ClassElement, ctx: Ctx): string {
   if (ts.isMethodDeclaration(member)) {
     const mods = memberModifierPrefix(member);
     const name = propertyName(member.name);
-    const body = member.body ? emitBlock(member.body, ctx) : "";
     const tp = emitTypeParams(member.typeParameters, ctx);
     const params = emitParamList(member.parameters, ctx);
-    // Drop method return types in default mode
     const rt = (member.type && ctx.typed) ? "->" + emitTypeNode(member.type, ctx) : "";
+    // Expression-body shorthand for single-return methods
+    if (member.body && isSingleReturnBlock(member.body)) {
+      const expr = (member.body.statements[0] as ts.ReturnStatement).expression!;
+      return `${mods}${name}${tp}${params}${rt}=>${emitExpr(expr, ctx)}`;
+    }
+    const body = member.body ? emitFunctionBodyBlock(member.body, ctx) : "";
     return `${mods}${name}${tp}${params}${rt}${body}`;
   }
   if (ts.isConstructorDeclaration(member)) {
@@ -397,9 +401,59 @@ function emitFunction(node: ts.FunctionDeclaration, ctx: Ctx, topLevel: boolean)
     rt = "->" + emitTypeNode(node.type, ctx);
   }
 
-  const body = node.body ? emitBlock(node.body, ctx) : "";
   const prefix = (isAsync ? "a " : "") + (isGenerator ? "*" : "");
+
+  // Expression-body shorthand: if the body is exactly `{ return expr; }`, emit as `name(params)=>expr`.
+  if (node.body && isSingleReturnBlock(node.body) && !isGenerator) {
+    const expr = (node.body.statements[0] as ts.ReturnStatement).expression!;
+    return `${mods}${prefix}${name}${tp}${params}${rt}=>${emitExpr(expr, ctx)}`;
+  }
+
+  // Multi-statement body with implicit last return
+  const body = node.body ? emitFunctionBodyBlock(node.body, ctx) : "";
   return `${mods}${prefix}${name}${tp}${params}${rt}${body}`;
+}
+
+// True iff the block is exactly `{ return expr; }` (single ReturnStmt with an expression).
+function isSingleReturnBlock(block: ts.Block): boolean {
+  if (block.statements.length !== 1) return false;
+  const s = block.statements[0];
+  return ts.isReturnStatement(s) && s.expression !== undefined;
+}
+
+// Emit a function body block, dropping the trailing `^` on the last return
+// when the body already contains another `^` elsewhere. The "other `^`"
+// preserves the value-returning signal for the AET parser.
+function emitFunctionBodyBlock(block: ts.Block, ctx: Ctx): string {
+  const stmts = block.statements;
+  if (stmts.length === 0) return "{}";
+  // Check for another return anywhere in the body (not including the very last stmt if it IS a return)
+  const last = stmts[stmts.length - 1];
+  const lastIsReturn = ts.isReturnStatement(last) && last.expression !== undefined;
+  if (!lastIsReturn) return "{" + emitStmtSequence(stmts, ctx) + "}";
+
+  // Scan the rest of the body for ANY other return statement (recursively).
+  const hasOtherReturn = stmts.slice(0, -1).some(s => containsReturn(s));
+  if (!hasOtherReturn) {
+    // No signal available: keep the last `^` so the parser can distinguish value-return from void.
+    return "{" + emitStmtSequence(stmts, ctx) + "}";
+  }
+
+  // Drop the `^` on the last return by emitting the expression directly.
+  const inner = emitStmtSequence(stmts.slice(0, -1), ctx);
+  const lastExpr = emitExpr((last as ts.ReturnStatement).expression!, ctx);
+  return "{" + (inner ? inner + ";" : "") + lastExpr + "}";
+}
+
+function containsReturn(node: ts.Node): boolean {
+  if (ts.isReturnStatement(node)) return true;
+  // Stop at function boundaries — a nested function's return doesn't count.
+  if (ts.isFunctionDeclaration(node) || ts.isFunctionExpression(node)
+      || ts.isArrowFunction(node) || ts.isMethodDeclaration(node)
+      || ts.isAccessor(node) || ts.isConstructorDeclaration(node)) return false;
+  let found = false;
+  ts.forEachChild(node, c => { if (!found && containsReturn(c)) found = true; });
+  return found;
 }
 
 // ---------------------------------------------------------------------------
@@ -841,7 +895,13 @@ function emitArrow(expr: ts.ArrowFunction, ctx: Ctx): string {
   const rt = (ctx.typed && expr.type) ? "->" + emitTypeNode(expr.type, ctx) : "";
   let body: string;
   if (ts.isBlock(expr.body)) {
-    body = emitBlock(expr.body, ctx);
+    // Single-return block → drop the braces and use the expression directly
+    if (isSingleReturnBlock(expr.body)) {
+      const ret = (expr.body.statements[0] as ts.ReturnStatement).expression!;
+      body = emitExpr(ret, ctx);
+    } else {
+      body = emitFunctionBodyBlock(expr.body, ctx);
+    }
   } else {
     body = emitExpr(expr.body, ctx);
   }
