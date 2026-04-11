@@ -373,8 +373,9 @@ function cmdCompile() {
             console.error(ir.error);
             process.exit(1);
         }
-        const baseExt = ".aetj";
-        const className = basename(file, baseExt).replace(/^\w/, c => c.toUpperCase());
+        // Strip whatever extension the file has (.aetj, .aet, or other) so the
+        // derived class name is always a valid Java identifier.
+        const className = basename(file, ext).replace(/^\w/, c => c.toUpperCase());
         output = emitJava(ir.ir, { className });
     }
     else if (targetJava) {
