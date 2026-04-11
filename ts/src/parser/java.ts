@@ -1445,8 +1445,12 @@ export class AETJavaParser extends CstParser {
       // Switch expression (switch as a value)
       { ALT: () => this.SUBRULE(this.switchStmt) },
       // Explicit 'new': 'new' Type '(' args ')' or 'new' Type '[' size ']' or 'new' Type[]{...}
-      { ALT: () => {
-        this.CONSUME(New);
+      // Also: bare typed array literal `Type[]{...}` (no `new` keyword — token saving).
+      { GATE: () => {
+        if (tokenMatcher(this.LA(1), New)) return true;
+        return this.isBareArrayLit();
+      }, ALT: () => {
+        this.OPTION9(() => this.CONSUME(New));
         this.SUBRULE(this.typeExpr);
         this.OR6([
           // new Type(args) — constructor call
@@ -1527,6 +1531,29 @@ export class AETJavaParser extends CstParser {
       }},
     ]);
   });
+
+  // Detect a bare typed array literal at the current position:
+  //   Ident ('[' ']')+ '{'
+  // Used to let `int[]{1,2,3}` parse without the `new` keyword.
+  private isBareArrayLit(): boolean {
+    let i = 1;
+    const t1 = this.LA(i);
+    if (!t1 || !tokenMatcher(t1, Ident)) return false;
+    i++;
+    let hasBracket = false;
+    // Walk through one or more `[]` pairs.
+    while (true) {
+      const tb = this.LA(i);
+      if (!tb || !tokenMatcher(tb, LBrack)) break;
+      const tr = this.LA(i + 1);
+      if (!tr || !tokenMatcher(tr, RBrack)) break;
+      i += 2;
+      hasBracket = true;
+    }
+    if (!hasBracket) return false;
+    const tnext = this.LA(i);
+    return tnext !== undefined && tokenMatcher(tnext, LBrace);
+  }
 
   // Detect if '<' after ident is type args (e.g., ArrayList<String>()) vs comparison
   // Heuristic: scan for matching '>' ensuring valid type content

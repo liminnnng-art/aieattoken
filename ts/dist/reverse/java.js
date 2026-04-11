@@ -2563,9 +2563,9 @@ function aetjExpr(expr) {
             return expr.value;
         case "CompositeLit": {
             const typeStr = expr.type ? aetjExpr(expr.type) : "";
-            // Array composite literals need 'new' keyword for the parser: new int[]{1,2,3}
-            const prefix = typeStr ? "new " : "";
-            return `${prefix}${typeStr}{${expr.elts.map(aetjExpr).join(",")}}`;
+            // Typed array literal: drop the `new` keyword — the parser now accepts
+            // the bare `Type[]{...}` form (saves 1 token per literal).
+            return `${typeStr}{${expr.elts.map(aetjExpr).join(",")}}`;
         }
         case "BinaryExpr":
             return `${aetjExpr(expr.left)}${expr.op}${aetjExpr(expr.right)}`;

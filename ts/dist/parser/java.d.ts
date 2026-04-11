@@ -157,6 +157,7 @@ export declare class AETJavaParser extends CstParser {
     private postfixExpr;
     private isPipeOp;
     private primaryExpr;
+    private isBareArrayLit;
     private isTypeArgs;
     private lambdaParams;
     private lambdaParam;

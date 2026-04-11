@@ -1529,8 +1529,11 @@ function transformPrimaryExpr(node) {
         };
     }
     // Array/collection initializer: '{' exprList? '}'
-    // When we have LBrace but no Pipe (not lambda) and no New (new Type[]{...} handled below)
-    if (tok(node, "LBrace") && !tok(node, "Pipe") && !tok(node, "New")) {
+    // Skip when:
+    //   - Pipe is present → it's a lambda (handled earlier)
+    //   - New is present → it's `new Type[]{...}` (handled below)
+    //   - typeExpr is present → it's bare `Type[]{...}` (handled below)
+    if (tok(node, "LBrace") && !tok(node, "Pipe") && !tok(node, "New") && !child(node, "typeExpr")) {
         const allExprs = children(node, "expr");
         const elts = allExprs.map(transformExpr);
         return { kind: "CompositeLit", elts };
@@ -1539,8 +1542,11 @@ function transformPrimaryExpr(node) {
     const sw = child(node, "switchStmt");
     if (sw)
         return transformSwitchExpr(sw);
-    // Explicit 'new': new Type(args) or new Type[size] or new Type[]{...}
-    if (tok(node, "New")) {
+    // Explicit 'new' OR bare typed array literal: Type[]{...} (no `new` keyword)
+    //
+    // The same primaryExpr alternative now accepts `new? Type ...`, so we trigger
+    // whenever we see a typeExpr child (which only appears in that alternative).
+    if (tok(node, "New") || child(node, "typeExpr")) {
         const te = child(node, "typeExpr");
         const newType = te ? transformTypeExpr(te) : IR.simpleType("Object");
         // Check for array creation: new Type[size]
