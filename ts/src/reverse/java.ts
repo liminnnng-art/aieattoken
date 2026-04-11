@@ -2708,17 +2708,7 @@ function aetjClassDecl(node: IR.Java_ClassDecl): string {
     let fieldStr = `${prefix}${typeName} ${f.name}`;
     const init = (f as any).javaInit;
     if (init) {
-      // If the field type is a collection (ArrayList, HashMap, etc.) and init is mk(...),
-      // emit as "new TypeName<>()" to preserve the collection type through round-trip
-      const collectionTypes = ["ArrayList", "HashMap", "LinkedHashMap", "TreeMap",
-        "HashSet", "LinkedHashSet", "TreeSet", "ArrayDeque", "PriorityQueue",
-        "LinkedList", "ConcurrentHashMap", "StringBuilder"];
-      const baseTypeName = typeName.replace(/<.*>/, "");
-      if (collectionTypes.includes(baseTypeName) && init.kind === "CallExpr" && init.func?.name === "mk") {
-        fieldStr += `=new ${baseTypeName}<>()`;
-      } else {
-        fieldStr += `=${aetjExpr(init)}`;
-      }
+      fieldStr += `=${aetjExpr(init)}`;
     }
     parts.push(fieldStr);
   }
