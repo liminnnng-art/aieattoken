@@ -724,7 +724,20 @@ function transformTopFuncOrVarDecl(node: CstNode): IR.IRNode | null {
 // ─── Parameter list (Java order: Type name) ───────────────────────────────────
 
 function transformParamList(node: CstNode): IR.IRParam[] {
-  return children(node, "param").map(transformParam);
+  const params = children(node, "param").map(transformParam);
+  // Inherit-from-previous: if a param has no explicit type (transformParam
+  // marks it with type `var`), inherit the type of the most recent typed
+  // param. This is the inverse of the reverse emitter's collapse rule
+  // — `int a,b,c` → all three are int.
+  let lastType: IR.IRType | undefined;
+  for (const p of params) {
+    if (p.type && p.type.name && p.type.name !== "var") {
+      lastType = p.type;
+    } else if (lastType) {
+      p.type = lastType;
+    }
+  }
+  return params;
 }
 
 function transformParam(p: CstNode): IR.IRParam {

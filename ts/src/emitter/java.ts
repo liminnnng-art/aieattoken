@@ -396,7 +396,7 @@ function emitStaticMethod(node: IR.IRFuncDecl, level: number): string {
     }
 
     const returnType = emitReturnType(node.results);
-    const params = node.params.map(p => `${mapType(p.type)} ${p.name}`).join(", ");
+    const params = emitMethodParams(node.params, node.results[0]);
     const typeParamsStr = node.typeParams && node.typeParams.length > 0 ? `<${node.typeParams.join(", ")}> ` : "";
 
     const lines: string[] = [];
@@ -554,7 +554,7 @@ function emitInstanceMethod(node: IR.IRFuncDecl, level: number): string {
     }
 
     const returnType = emitReturnType(node.results);
-    const params = node.params.map(p => `${mapType(p.type)} ${p.name}`).join(", ");
+    const params = emitMethodParams(node.params, node.results[0]);
 
     const lines: string[] = [];
 
@@ -589,7 +589,7 @@ function emitInterfaceDecl(node: IR.IRInterfaceDecl, level: number): string {
     lines.push(`${indent(level)}public interface ${node.name} {`);
     for (const m of node.methods) {
         const returnType = emitReturnType(m.results);
-        const params = m.params.map(p => `${mapType(p.type)} ${p.name}`).join(", ");
+        const params = emitMethodParams(m.params, m.results[0]);
         lines.push(`${indent(level + 1)}${returnType} ${m.name}(${params});`);
     }
     lines.push(`${indent(level)}}`);
@@ -1095,7 +1095,12 @@ function emitJavaClassDecl(node: IR.Java_ClassDecl, level: number): string {
 }
 
 function emitConstructor(className: string, node: IR.IRFuncDecl, level: number): string {
-    const params = node.params.map(p => `${mapType(p.type)} ${p.name}`).join(", ");
+    // Constructors have no return type to use as a fallback for missing param
+    // types — pass undefined and the helper will fall back to `int`. The
+    // reverse should not drop ctor param types in any case (constructors are
+    // always invoked with explicit arguments and rarely follow the
+    // all-same-type rule).
+    const params = emitMethodParams(node.params);
     const lines: string[] = [];
     lines.push(`${indent(level)}public ${className}(${params}) {`);
     lines.push(emitBlockBody(node.body, level + 1));
@@ -1239,7 +1244,7 @@ function emitSealedInterfaceDecl(node: IR.Java_SealedInterfaceDecl, level: numbe
 
     for (const m of node.methods) {
         const returnType = emitReturnType(m.results);
-        const params = m.params.map(p => `${mapType(p.type)} ${p.name}`).join(", ");
+        const params = emitMethodParams(m.params, m.results[0]);
         lines.push(`${indent(level + 1)}${returnType} ${m.name}(${params});`);
     }
 
@@ -2133,6 +2138,38 @@ function emitReturnType(results: IR.IRType[]): string {
     // Multiple returns not natively supported in Java; return the first type
     // (the transformer should ideally convert multi-returns before emission)
     return mapType(results[0]);
+}
+
+/** Emit a method parameter list, recovering missing types via fallback inference.
+ *
+ *  When the AETJ source dropped types from the param list (because all params
+ *  share the trivial type matching the return type), the IR will carry params
+ *  with `var` (or undefined) types.  Recover by:
+ *    1. Using the most recent typed param's type (handled by the transformer's
+ *       inherit-from-previous pass).
+ *    2. If still untyped, default to the function's return type when it is a
+ *       trivial Java type.
+ *    3. Otherwise default to `int`.
+ */
+const TRIVIAL_PARAM_FALLBACK_TYPES = new Set([
+    "int", "long", "double", "float", "boolean", "char", "String",
+    "byte", "short",
+]);
+
+function emitMethodParams(params: IR.IRParam[], returnType?: IR.IRType): string {
+    let fallback: IR.IRType | undefined;
+    if (returnType && returnType.name) {
+        const mapped = mapType(returnType);
+        if (TRIVIAL_PARAM_FALLBACK_TYPES.has(mapped)) {
+            fallback = returnType;
+        }
+    }
+    return params.map(p => {
+        const t = (p.type && p.type.name && p.type.name !== "var")
+            ? p.type
+            : (fallback || IR.simpleType("int"));
+        return `${mapType(t)} ${p.name}`;
+    }).join(", ");
 }
 
 /** Convert primitive Java types to their boxed equivalents for use in generics. */

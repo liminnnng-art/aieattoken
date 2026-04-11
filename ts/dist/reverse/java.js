@@ -1927,16 +1927,55 @@ function aetjReturnTypeName(m) {
         return "";
     return irTypeToJavaName(m.results[0]);
 }
-/** Get Java parameter list string for a method/constructor. */
+/** Trivial Java types whose names are single cl100k_base tokens — safe to drop
+ *  from the param list if they match the function's return type, because the
+ *  Java emitter can recover them via `emitMethodParams` fallback.
+ */
+const TRIVIAL_PARAM_TYPES = new Set([
+    "int", "long", "double", "float", "boolean", "char", "String",
+    "byte", "short",
+]);
+/** Get Java parameter list string for a method/constructor.
+ *
+ * Two-phase compression:
+ *
+ *   1. **All-same-as-return**: when every param has the same trivial type AND
+ *      it matches the function's return type, drop *all* type words. The Java
+ *      emitter recovers the types from the return type via `emitMethodParams`.
+ *      Example: `int gcd(int a, int b)` → `gcd(a,b)->int`.
+ *
+ *   2. **Inherit-from-previous**: when consecutive params share the same type,
+ *      only the first one carries the type — subsequent ones inherit. The
+ *      transformer reverses this rule on parse, so round-trip is safe.
+ *      Example: `int multiply(int[][] a, int[][] b)` → `multiply(int[][] a,b)`.
+ */
 function aetjParamList(m) {
     const javaParams = m.javaParams;
-    if (javaParams && javaParams.length > 0) {
-        return javaParams.map(p => `${stripWildcards(p.typeName)} ${p.name}`).join(",");
+    const entries = javaParams && javaParams.length > 0
+        ? javaParams.map(p => ({ name: p.name, typeName: stripWildcards(p.typeName) }))
+        : m.params.map(p => ({ name: p.name, typeName: irTypeToJavaName(p.type) }));
+    // Phase 1: drop ALL types when every param has the same trivial type and
+    // it matches the return type.
+    if (entries.length > 0) {
+        const firstType = entries[0].typeName;
+        if (TRIVIAL_PARAM_TYPES.has(firstType) && entries.every(e => e.typeName === firstType)) {
+            const returnType = aetjReturnTypeName(m);
+            if (returnType === firstType) {
+                return entries.map(p => p.name).join(",");
+            }
+        }
     }
-    // Fallback to IR params
-    return m.params.map(p => {
-        const tn = irTypeToJavaName(p.type);
-        return tn ? `${tn} ${p.name}` : p.name;
+    // Phase 2: inherit-from-previous.
+    let prevType = null;
+    return entries.map(p => {
+        const tn = p.typeName;
+        if (!tn)
+            return p.name;
+        if (tn === prevType) {
+            return p.name;
+        }
+        prevType = tn;
+        return `${tn} ${p.name}`;
     }).join(",");
 }
 /** Reverse-map a Go-style identifier name back to Java. */
