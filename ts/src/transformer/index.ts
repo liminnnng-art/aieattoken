@@ -144,6 +144,10 @@ function transformMethodSigList(node: CstNode): IR.IRMethodSig[] {
   });
 }
 
+// Sentinel marker for params with no explicit type in source AET.
+// Replaced by inferred types during transformFuncOrMethodDecl (or defaults to int).
+const PARAM_INFER_MARKER = "__aet_infer__";
+
 function transformFuncOrMethodDecl(node: CstNode): IR.IRFuncDecl {
   const idents = tokAll(node, "Ident");
   const si = nextStmtIndex();
@@ -171,6 +175,7 @@ function transformFuncOrMethodDecl(node: CstNode): IR.IRFuncDecl {
 
   const rt = child(node, "returnType") || child(node, "returnType", 1);
   const results = rt ? transformReturnType(rt) : [];
+  const hasExplicitReturnType = results.length > 0;
 
   const sl = child(node, "stmtList") || child(node, "stmtList", 1);
   const body = sl ? transformStmtList(sl) : { kind: "BlockStmt" as const, stmts: [] };
@@ -181,11 +186,1089 @@ function transformFuncOrMethodDecl(node: CstNode): IR.IRFuncDecl {
     results.push(IR.simpleType("error"));
   }
 
+  // Implicit return: convert tail expression statements in the body (and its
+  // terminal branches) into ReturnStmt nodes when the function does not
+  // already have explicit returns everywhere. This implements the compact AET
+  // convention where the last bare expression in a function body is an
+  // implicit return (e.g. `factorial(n){if n==0{1};n*factorial(n-1)}`).
+  //
+  // We only apply this to *value-returning* functions. A function is deemed
+  // procedural (returns nothing) when its top-level body contains a bare
+  // CallExpr statement — that is a fire-and-forget call whose result is
+  // discarded, which is incompatible with value-returning semantics. Such
+  // functions skip tail-expr conversion and return-type inference.
+  const isProcedural = !hasExplicitReturnType && isProceduralBody(body);
+  if (name !== "main" && !isProcedural) {
+    convertTailExprsToReturns(body);
+  }
+
+  // Build a symbol table of local variables by walking declarations.
+  // This is used by both parameter and return-type inference so that e.g.
+  // returning a local variable `result:=""` produces a `string` return type.
+  const symbols: SymbolTable = new Map();
+  // Seed symbols with the current best-guess type for each param — starts as
+  // the sentinel marker so we don't pollute inference with a wrong assumption.
+  for (const p of params) symbols.set(p.name, p.type);
+  collectLocalSymbols(body, symbols);
+
+  // Infer untyped parameter types using both usage heuristics and the symbol
+  // table, re-running the symbol collection once each param narrows so that
+  // downstream variable assignments see the refined type.
+  for (const p of params) {
+    if (p.type.name === PARAM_INFER_MARKER) {
+      const inferredType = inferParamType(p.name, body, symbols);
+      p.type = inferredType;
+      symbols.set(p.name, inferredType);
+    }
+  }
+
+  // Recursive-call positional propagation: a recursive `f(a,b,c)` where the
+  // function is `f` constrains argument a to match param[0], b to param[1],
+  // etc. When an argument is a bare ident referring to another param, the
+  // two params must share a type. We iterate until fixed point.
+  //
+  // Example: `hanoi(n,from,to,via)` with body containing
+  // `hanoi(n-1,from,via,to)`. After direct inference from/to are `string` (via
+  // the %s format in Printf). The recursive call says via ≡ to → via=string.
+  propagateRecursiveCallTypes(name, params, body);
+
+  // Second pass to pick up refined local types.
+  collectLocalSymbols(body, symbols);
+
+  // Infer return type from return statements if no explicit return type.
+  // Procedural functions stay void.
+  if (!hasExplicitReturnType && !isProcedural) {
+    const inferred = inferReturnTypes(body, symbols);
+    if (inferred.length > 0) {
+      results.push(...inferred);
+    }
+  }
+
   return { kind: "FuncDecl", name, receiver, params, results, body, stmtIndex: si };
+}
+
+// Symbol table: maps local variable name → inferred IR type.
+type SymbolTable = Map<string, IR.IRType>;
+
+/**
+ * Walk a block and record the inferred type of every variable introduced by a
+ * short declaration (`x := ...`) or a typed var declaration. Existing entries
+ * are not overwritten with worse information (e.g. an unknown ident).
+ */
+function collectLocalSymbols(block: IR.IRBlockStmt, symbols: SymbolTable): void {
+  function visitExpr(e: IR.IRExpr): void {
+    if (!e) return;
+    if (e.kind === "CallExpr") {
+      const c = e as IR.IRCallExpr;
+      // Parser builds `[]rune(x)` as a CallExpr with ArrayTypeExpr func and
+      // the inner expression as arg. Seed the type of that inner arg's name
+      // whenever it's a bare identifier — covers `runes:=[]rune(s)` style.
+      visitExpr(c.func);
+      for (const a of c.args) visitExpr(a);
+    }
+  }
+
+  function visit(n: IR.IRNode | IR.IRExprStmt): void {
+    if (!n) return;
+    switch (n.kind) {
+      case "ShortDeclStmt": {
+        const s = n as IR.IRShortDeclStmt;
+        // Single assignment: record inferred type.
+        if (s.names.length === 1 && s.values.length === 1) {
+          const t = inferExprType(s.values[0], symbols);
+          if (t) symbols.set(s.names[0], t);
+        } else if (s.names.length === s.values.length) {
+          for (let i = 0; i < s.names.length; i++) {
+            const t = inferExprType(s.values[i], symbols);
+            if (t) symbols.set(s.names[i], t);
+          }
+        }
+        for (const v of s.values) visitExpr(v);
+        return;
+      }
+      case "VarDecl": {
+        const v = n as IR.IRVarDecl;
+        if (v.type) symbols.set(v.name, v.type);
+        else if (v.value) {
+          const t = inferExprType(v.value, symbols);
+          if (t) symbols.set(v.name, t);
+        }
+        if (v.value) visitExpr(v.value);
+        return;
+      }
+      case "BlockStmt":
+        for (const s of (n as IR.IRBlockStmt).stmts) visit(s);
+        return;
+      case "IfStmt": {
+        const i = n as IR.IRIfStmt;
+        if (i.init) visit(i.init);
+        visit(i.body);
+        if (i.else_) visit(i.else_);
+        return;
+      }
+      case "ForStmt": {
+        const f = n as IR.IRForStmt;
+        if (f.init) visit(f.init);
+        if (f.post) visit(f.post);
+        visit(f.body);
+        return;
+      }
+      case "RangeStmt":
+        visit((n as IR.IRRangeStmt).body);
+        return;
+      case "SwitchStmt": {
+        const sw = n as IR.IRSwitchStmt;
+        for (const c of sw.cases) for (const s of c.body) visit(s);
+        return;
+      }
+    }
+  }
+
+  for (const s of block.stmts) visit(s);
 }
 
 function hasErrorProp(block: IR.IRBlockStmt): boolean {
   return JSON.stringify(block).includes('"ErrorPropExpr"');
+}
+
+/**
+ * A function body is "procedural" (returns nothing) when no evidence is found
+ * that it produces a value. Evidence includes:
+ *   - a tail expression that isn't a CallExpr (e.g. BinaryExpr, Ident, literal)
+ *   - a tail CallExpr that is a type conversion like `string(x)` or `[]rune(x)`
+ *   - any explicit `^expr` return with values
+ *
+ * We examine every "tail position" — the last statement of the body plus the
+ * last statement of every if/else-branch and switch-case. If none of them
+ * looks like a value return, the function is procedural and we skip both the
+ * tail-expression rewrite and return-type inference.
+ *
+ * This distinguishes:
+ *   - hanoi(): all tails are `hanoi(...)` calls → procedural
+ *   - ackermann(): one `if` has a `n+1` tail (non-call) → value-returning
+ *   - caesar(): tail is `string(result)` (type conversion) → value-returning
+ */
+function isProceduralBody(block: IR.IRBlockStmt): boolean {
+  return !hasValueReturningSignal(block);
+}
+
+/** Recognise `int(x)`, `string(x)`, `[]rune(x)`, etc. */
+function isTypeConversionCall(e: IR.IRExpr): boolean {
+  if (e.kind !== "CallExpr") return false;
+  const c = e as IR.IRCallExpr;
+  if (c.func.kind === "ArrayTypeExpr") return true;
+  if (c.func.kind === "Ident") {
+    const name = (c.func as IR.IRIdent).name;
+    return name === "string" || name === "int" || name === "int8" || name === "int16" ||
+           name === "int32" || name === "int64" || name === "uint" || name === "uint8" ||
+           name === "uint16" || name === "uint32" || name === "uint64" || name === "uintptr" ||
+           name === "byte" || name === "rune" || name === "float32" || name === "float64" ||
+           name === "bool" || name === "complex64" || name === "complex128";
+  }
+  return false;
+}
+
+/** An expression that obviously produces a value (not a call-with-discarded-result). */
+function isValueExpr(e: IR.IRExpr): boolean {
+  if (!e) return false;
+  switch (e.kind) {
+    case "BasicLit":
+    case "Ident":
+    case "BinaryExpr":
+    case "UnaryExpr":
+    case "IndexExpr":
+    case "SliceExpr":
+    case "SelectorExpr":
+    case "CompositeLit":
+    case "ParenExpr":
+    case "TypeAssertExpr":
+      return true;
+    case "CallExpr":
+      return isTypeConversionCall(e);
+  }
+  return false;
+}
+
+function hasValueReturningSignal(n: IR.IRNode | IR.IRExprStmt | IR.IRBlockStmt | undefined): boolean {
+  if (!n) return false;
+  switch (n.kind) {
+    case "BlockStmt": {
+      const b = n as IR.IRBlockStmt;
+      // Check each non-tail statement's nested structures for signals.
+      for (let i = 0; i < b.stmts.length; i++) {
+        const s = b.stmts[i];
+        if (i < b.stmts.length - 1) {
+          // Non-tail: still examine nested if/switch bodies for their own tails.
+          if (hasValueReturningSignal(s)) return true;
+        } else {
+          // Tail statement.
+          if (s.kind === "ExprStmt") {
+            if (isValueExpr((s as IR.IRExprStmt).expr)) return true;
+          } else if (s.kind === "ReturnStmt") {
+            if ((s as IR.IRReturnStmt).values.length > 0) return true;
+          } else {
+            if (hasValueReturningSignal(s)) return true;
+          }
+        }
+      }
+      return false;
+    }
+    case "IfStmt": {
+      const i = n as IR.IRIfStmt;
+      if (hasValueReturningSignal(i.body)) return true;
+      if (i.else_) return hasValueReturningSignal(i.else_ as any);
+      return false;
+    }
+    case "ForStmt":
+      return hasValueReturningSignal((n as IR.IRForStmt).body);
+    case "RangeStmt":
+      return hasValueReturningSignal((n as IR.IRRangeStmt).body);
+    case "SwitchStmt": {
+      const sw = n as IR.IRSwitchStmt;
+      for (const c of sw.cases) {
+        if (c.body.length === 0) continue;
+        const last = c.body[c.body.length - 1];
+        if (last.kind === "ExprStmt" && isValueExpr((last as IR.IRExprStmt).expr)) return true;
+        if (last.kind === "ReturnStmt" && (last as IR.IRReturnStmt).values.length > 0) return true;
+        if (hasValueReturningSignal(last)) return true;
+      }
+      return false;
+    }
+    case "ReturnStmt":
+      return (n as IR.IRReturnStmt).values.length > 0;
+    case "ExprStmt":
+      return isValueExpr((n as IR.IRExprStmt).expr);
+  }
+  return false;
+}
+
+/**
+ * Type-strength ranking: a higher number means we are "more confident" the
+ * type is correct, so that when two constraints conflict the stronger one
+ * wins. Types like `int` are the default fallback → low strength.
+ */
+function typeStrength(t: IR.IRType): number {
+  if (!t) return 0;
+  if (t.name === PARAM_INFER_MARKER) return 0;
+  if (t.name === "int") return 1;
+  // String, slices, maps are more specific → stronger evidence.
+  return 5;
+}
+
+/**
+ * Walk the body looking for calls to `funcName` and align the parameter types
+ * transitively: if argument i at a call site is a bare identifier matching
+ * another param j, then params i and j must share a type. When one side has a
+ * stronger type than the other, upgrade the weaker one. Iterates until fixed
+ * point (bounded to a few passes).
+ */
+function propagateRecursiveCallTypes(funcName: string, params: IR.IRParam[], body: IR.IRBlockStmt): void {
+  if (params.length === 0 || !funcName) return;
+  const paramNames = new Set(params.map(p => p.name));
+
+  const calls: IR.IRExpr[][] = [];
+
+  function collectCalls(e: IR.IRExpr): void {
+    if (!e) return;
+    switch (e.kind) {
+      case "CallExpr": {
+        const c = e as IR.IRCallExpr;
+        if (c.func.kind === "Ident" && (c.func as IR.IRIdent).name === funcName) {
+          calls.push(c.args);
+        }
+        collectCalls(c.func);
+        for (const a of c.args) collectCalls(a);
+        return;
+      }
+      case "BinaryExpr":
+        collectCalls((e as IR.IRBinaryExpr).left);
+        collectCalls((e as IR.IRBinaryExpr).right);
+        return;
+      case "UnaryExpr":
+        collectCalls((e as IR.IRUnaryExpr).x);
+        return;
+      case "ParenExpr":
+        collectCalls((e as IR.IRParenExpr).x);
+        return;
+      case "IndexExpr":
+        collectCalls((e as IR.IRIndexExpr).x);
+        collectCalls((e as IR.IRIndexExpr).index);
+        return;
+      case "SelectorExpr":
+        collectCalls((e as IR.IRSelectorExpr).x);
+        return;
+      case "CompositeLit":
+        for (const el of (e as IR.IRCompositeLit).elts) collectCalls(el);
+        return;
+      case "KeyValueExpr":
+        collectCalls((e as IR.IRKeyValueExpr).key);
+        collectCalls((e as IR.IRKeyValueExpr).value);
+        return;
+    }
+  }
+
+  function walk(n: IR.IRNode | IR.IRExprStmt): void {
+    if (!n) return;
+    switch (n.kind) {
+      case "BlockStmt":
+        for (const s of (n as IR.IRBlockStmt).stmts) walk(s);
+        return;
+      case "ExprStmt":
+        collectCalls((n as IR.IRExprStmt).expr);
+        return;
+      case "AssignStmt": {
+        const a = n as IR.IRAssignStmt;
+        for (const l of a.lhs) collectCalls(l);
+        for (const r of a.rhs) collectCalls(r);
+        return;
+      }
+      case "ShortDeclStmt":
+        for (const v of (n as IR.IRShortDeclStmt).values) collectCalls(v);
+        return;
+      case "IncDecStmt":
+        collectCalls((n as IR.IRIncDecStmt).x);
+        return;
+      case "ReturnStmt":
+        for (const v of (n as IR.IRReturnStmt).values) collectCalls(v);
+        return;
+      case "IfStmt": {
+        const i = n as IR.IRIfStmt;
+        collectCalls(i.cond);
+        walk(i.body);
+        if (i.else_) walk(i.else_);
+        if (i.init) walk(i.init);
+        return;
+      }
+      case "ForStmt": {
+        const f = n as IR.IRForStmt;
+        if (f.init) walk(f.init);
+        if (f.cond) collectCalls(f.cond);
+        if (f.post) walk(f.post);
+        walk(f.body);
+        return;
+      }
+      case "RangeStmt":
+        walk((n as IR.IRRangeStmt).body);
+        return;
+      case "SwitchStmt": {
+        const sw = n as IR.IRSwitchStmt;
+        if (sw.tag) collectCalls(sw.tag);
+        for (const c of sw.cases) {
+          if (c.values) for (const v of c.values) collectCalls(v);
+          for (const s of c.body) walk(s);
+        }
+        return;
+      }
+      case "VarDecl": {
+        const v = n as IR.IRVarDecl;
+        if (v.value) collectCalls(v.value);
+        return;
+      }
+    }
+  }
+
+  walk(body);
+  if (calls.length === 0) return;
+
+  // Iterate until fixed point.
+  for (let iter = 0; iter < 4; iter++) {
+    let changed = false;
+    for (const args of calls) {
+      const len = Math.min(args.length, params.length);
+      for (let i = 0; i < len; i++) {
+        const arg = args[i];
+        if (arg.kind !== "Ident") continue;
+        const argName = (arg as IR.IRIdent).name;
+        if (!paramNames.has(argName)) continue;
+        const argParam = params.find(p => p.name === argName)!;
+        const paramI = params[i];
+        const strA = typeStrength(argParam.type);
+        const strB = typeStrength(paramI.type);
+        if (strA > strB) {
+          paramI.type = argParam.type;
+          changed = true;
+        } else if (strB > strA) {
+          argParam.type = paramI.type;
+          changed = true;
+        }
+      }
+    }
+    if (!changed) break;
+  }
+}
+
+/**
+ * Convert tail expression statements into return statements recursively.
+ *
+ * For the compact AET format (`factorial(n){if n==0{1};n*factorial(n-1)}`),
+ * a trailing bare expression is an implicit return. We walk every "tail
+ * position" in the block tree and rewrite `ExprStmt(e)` to `ReturnStmt(e)`.
+ *
+ * Tail positions:
+ *   - last statement of a function body block
+ *   - last statement of each branch of a terminal if/else chain
+ *   - last statement of each case in a terminal switch
+ */
+function convertTailExprsToReturns(block: IR.IRBlockStmt): void {
+  const stmts = block.stmts;
+  if (stmts.length === 0) return;
+
+  // Walk non-tail statements too: inner if/switch/for/range can themselves
+  // contain single-bare-expression implicit returns like `if c!=c2{false}`.
+  for (let i = 0; i < stmts.length; i++) {
+    convertInnerImplicitReturns(stmts[i]);
+  }
+
+  // Now handle the true tail statement.
+  const lastIdx = stmts.length - 1;
+  const last = stmts[lastIdx];
+  if (last.kind === "ExprStmt") {
+    stmts[lastIdx] = {
+      kind: "ReturnStmt",
+      values: [last.expr],
+      stmtIndex: (last as IR.IRExprStmt).stmtIndex ?? 0,
+    } as IR.IRReturnStmt;
+  } else if (last.kind === "IfStmt") {
+    convertTailExprsInIf(last);
+  } else if (last.kind === "SwitchStmt") {
+    convertTailExprsInSwitch(last);
+  } else if (last.kind === "BlockStmt") {
+    convertTailExprsToReturns(last as IR.IRBlockStmt);
+  }
+}
+
+/**
+ * Recursively walk a statement subtree looking for single-bare-expression
+ * `if`/`switch` children and rewrite them as returns. Unlike
+ * `convertTailExprsToReturns` this does NOT touch the last-statement
+ * position — it only handles nested cases that are NOT in tail position.
+ */
+function convertInnerImplicitReturns(n: IR.IRNode | IR.IRExprStmt): void {
+  if (!n) return;
+  switch (n.kind) {
+    case "IfStmt":
+      convertSingleExprIfToReturn(n as IR.IRIfStmt);
+      return;
+    case "SwitchStmt":
+      convertSingleExprSwitchToReturns(n as IR.IRSwitchStmt);
+      return;
+    case "ForStmt":
+      for (const s of (n as IR.IRForStmt).body.stmts) convertInnerImplicitReturns(s);
+      return;
+    case "RangeStmt":
+      for (const s of (n as IR.IRRangeStmt).body.stmts) convertInnerImplicitReturns(s);
+      return;
+    case "BlockStmt":
+      for (const s of (n as IR.IRBlockStmt).stmts) convertInnerImplicitReturns(s);
+      return;
+  }
+}
+
+/**
+ * Convert `if cond { x }` where the `then` branch is a single bare expression
+ * into a return statement. Used for mid-function if-statements like the
+ * `if n==0 { 1 }` guard in a compact-AET factorial.
+ */
+function convertSingleExprIfToReturn(ifStmt: IR.IRIfStmt): void {
+  const thenStmts = ifStmt.body.stmts;
+  if (thenStmts.length === 1 && thenStmts[0].kind === "ExprStmt") {
+    const expr = (thenStmts[0] as IR.IRExprStmt).expr;
+    thenStmts[0] = {
+      kind: "ReturnStmt",
+      values: [expr],
+      stmtIndex: 0,
+    } as IR.IRReturnStmt;
+  }
+  // Recurse: nested if/switch inside the then-branch can themselves have
+  // single-expression implicit returns.
+  for (const s of ifStmt.body.stmts) {
+    if (s.kind === "IfStmt") convertSingleExprIfToReturn(s);
+    if (s.kind === "SwitchStmt") convertSingleExprSwitchToReturns(s);
+  }
+}
+
+/**
+ * Convert any case clause whose body is a single bare expression into a
+ * return statement. Used for switch cases like `case a[mid]<target: mid+1`
+ * where the case body is a sole expression.
+ */
+function convertSingleExprSwitchToReturns(sw: IR.IRSwitchStmt): void {
+  for (const c of sw.cases) {
+    if (c.body.length === 1 && c.body[0].kind === "ExprStmt") {
+      const expr = (c.body[0] as IR.IRExprStmt).expr;
+      c.body[0] = {
+        kind: "ReturnStmt",
+        values: [expr],
+        stmtIndex: 0,
+      } as IR.IRReturnStmt;
+    }
+  }
+}
+
+/**
+ * Recursively convert the tail of every branch of an if/else chain to a
+ * return statement.
+ */
+function convertTailExprsInIf(ifStmt: IR.IRIfStmt): void {
+  convertTailExprsToReturns(ifStmt.body);
+  if (ifStmt.else_) {
+    if (ifStmt.else_.kind === "IfStmt") {
+      convertTailExprsInIf(ifStmt.else_ as IR.IRIfStmt);
+    } else if (ifStmt.else_.kind === "BlockStmt") {
+      convertTailExprsToReturns(ifStmt.else_ as IR.IRBlockStmt);
+    }
+  }
+}
+
+/**
+ * Recursively convert the tail of every case body in a switch statement.
+ */
+function convertTailExprsInSwitch(sw: IR.IRSwitchStmt): void {
+  for (const c of sw.cases) {
+    if (c.body.length === 0) continue;
+    const lastIdx = c.body.length - 1;
+    const last = c.body[lastIdx];
+    if (last.kind === "ExprStmt") {
+      c.body[lastIdx] = {
+        kind: "ReturnStmt",
+        values: [(last as IR.IRExprStmt).expr],
+        stmtIndex: 0,
+      } as IR.IRReturnStmt;
+    }
+  }
+}
+
+/**
+ * Walk every ReturnStmt in the block tree and collect the inferred Go type of
+ * each return value's first expression. Used when a function has no explicit
+ * return type.
+ *
+ * Returns an empty array if no return statements are found, or if the only
+ * returns are bare `return` with no values.
+ */
+function inferReturnTypes(block: IR.IRBlockStmt, symbols: SymbolTable): IR.IRType[] {
+  const samples: IR.IRExpr[][] = [];
+  collectReturns(block, samples);
+  if (samples.length === 0) return [];
+
+  // Determine arity from the widest non-empty sample.
+  let arity = 0;
+  for (const s of samples) if (s.length > arity) arity = s.length;
+  if (arity === 0) return [];
+
+  const result: IR.IRType[] = [];
+  for (let i = 0; i < arity; i++) {
+    let inferred: IR.IRType | undefined;
+    for (const s of samples) {
+      if (i >= s.length) continue;
+      const t = inferExprType(s[i], symbols);
+      if (t && t.name !== PARAM_INFER_MARKER) {
+        if (!inferred) inferred = t;
+        // Widen `int` <> `int64` etc. later if needed; for now, first wins.
+      }
+    }
+    result.push(inferred ?? IR.simpleType("int"));
+  }
+  return result;
+}
+
+function collectReturns(node: IR.IRNode | IR.IRExprStmt, out: IR.IRExpr[][]): void {
+  switch (node.kind) {
+    case "ReturnStmt":
+      out.push((node as IR.IRReturnStmt).values);
+      return;
+    case "BlockStmt":
+      for (const s of (node as IR.IRBlockStmt).stmts) collectReturns(s, out);
+      return;
+    case "IfStmt": {
+      const n = node as IR.IRIfStmt;
+      collectReturns(n.body, out);
+      if (n.else_) collectReturns(n.else_, out);
+      return;
+    }
+    case "ForStmt":
+      collectReturns((node as IR.IRForStmt).body, out);
+      return;
+    case "RangeStmt":
+      collectReturns((node as IR.IRRangeStmt).body, out);
+      return;
+    case "SwitchStmt": {
+      const sw = node as IR.IRSwitchStmt;
+      for (const c of sw.cases) {
+        for (const s of c.body) collectReturns(s, out);
+      }
+      return;
+    }
+  }
+}
+
+/**
+ * Best-effort Go type inference for a single IR expression. Returns undefined
+ * when the type cannot be determined. The optional symbol table lets us
+ * resolve identifier references to their declared type.
+ */
+function inferExprType(expr: IR.IRExpr, symbols?: SymbolTable): IR.IRType | undefined {
+  switch (expr.kind) {
+    case "BasicLit": {
+      const t = (expr as IR.IRBasicLit).type;
+      if (t === "INT") return IR.simpleType("int");
+      if (t === "FLOAT") return IR.simpleType("float64");
+      if (t === "STRING") return IR.simpleType("string");
+      if (t === "RUNE") return IR.simpleType("rune");
+      return undefined;
+    }
+    case "Ident": {
+      const name = (expr as IR.IRIdent).name;
+      if (name === "true" || name === "false") return IR.simpleType("bool");
+      if (name === "nil") return undefined;
+      if (symbols) {
+        const t = symbols.get(name);
+        if (t && t.name !== PARAM_INFER_MARKER) return t;
+      }
+      return undefined;
+    }
+    case "UnaryExpr": {
+      const u = expr as IR.IRUnaryExpr;
+      if (u.op === "!") return IR.simpleType("bool");
+      return inferExprType(u.x, symbols) ?? IR.simpleType("int");
+    }
+    case "BinaryExpr": {
+      const b = expr as IR.IRBinaryExpr;
+      if (b.op === "==" || b.op === "!=" || b.op === "<" || b.op === ">" ||
+          b.op === "<=" || b.op === ">=" || b.op === "&&" || b.op === "||") {
+        return IR.simpleType("bool");
+      }
+      // `+` on strings stays string; otherwise numeric.
+      const lt = inferExprType(b.left, symbols);
+      const rt = inferExprType(b.right, symbols);
+      if (b.op === "+" && (lt?.name === "string" || rt?.name === "string")) {
+        return IR.simpleType("string");
+      }
+      return lt ?? rt ?? IR.simpleType("int");
+    }
+    case "CallExpr": {
+      const c = expr as IR.IRCallExpr;
+      // Type conversions: string(x), int(x), []rune(x), []byte(x), float64(x)
+      if (c.func.kind === "Ident") {
+        const fname = (c.func as IR.IRIdent).name;
+        if (fname === "string") return IR.simpleType("string");
+        if (fname === "int") return IR.simpleType("int");
+        if (fname === "int64") return IR.simpleType("int64");
+        if (fname === "float64") return IR.simpleType("float64");
+        if (fname === "float32") return IR.simpleType("float32");
+        if (fname === "byte") return IR.simpleType("byte");
+        if (fname === "rune") return IR.simpleType("rune");
+        if (fname === "bool") return IR.simpleType("bool");
+        if (fname === "len" || fname === "cap") return IR.simpleType("int");
+        // `make([]T, ...)` → []T
+        if (fname === "make" && c.args.length >= 1) {
+          const t = inferExprType(c.args[0], symbols);
+          if (t) return t;
+          // The first arg may be a type expression — derive its name directly.
+          const first = c.args[0];
+          if (first.kind === "ArrayTypeExpr") {
+            const at = first as IR.IRArrayTypeExpr;
+            const eltName = (at.elt as any).name || "int";
+            return { name: "[]" + eltName, isSlice: true, elementType: IR.simpleType(eltName) };
+          }
+          if (first.kind === "MapTypeExpr") {
+            const mt = first as IR.IRMapTypeExpr;
+            const k = (mt.key as any).name || "string";
+            const v = (mt.value as any).name || "int";
+            return IR.mapType(IR.simpleType(k), IR.simpleType(v));
+          }
+        }
+        // `append(x, ...)` → same type as x
+        if (fname === "append" && c.args.length >= 1) {
+          return inferExprType(c.args[0], symbols);
+        }
+      }
+      if (c.func.kind === "ArrayTypeExpr") {
+        // []rune(x), []byte(x)
+        const at = c.func as IR.IRArrayTypeExpr;
+        const eltName = (at.elt as any).name || "byte";
+        return { name: "[]" + eltName, isSlice: true, elementType: IR.simpleType(eltName) };
+      }
+      return undefined;
+    }
+    case "CompositeLit": {
+      const cl = expr as IR.IRCompositeLit;
+      if (cl.type) {
+        if (cl.type.kind === "ArrayTypeExpr") {
+          const at = cl.type as IR.IRArrayTypeExpr;
+          const eltName = (at.elt as any).name || "int";
+          return { name: "[]" + eltName, isSlice: true, elementType: IR.simpleType(eltName) };
+        }
+        if (cl.type.kind === "MapTypeExpr") {
+          const mt = cl.type as IR.IRMapTypeExpr;
+          const k = (mt.key as any).name || "string";
+          const v = (mt.value as any).name || "int";
+          return IR.mapType(IR.simpleType(k), IR.simpleType(v));
+        }
+        if (cl.type.kind === "Ident") return IR.simpleType((cl.type as IR.IRIdent).name);
+      }
+      return undefined;
+    }
+    case "IndexExpr": {
+      const ix = expr as IR.IRIndexExpr;
+      // If we know the container type, its element type is the result.
+      const ct = inferExprType(ix.x, symbols);
+      if (ct) {
+        if (ct.isSlice && ct.elementType) return ct.elementType;
+        if (ct.name.startsWith("[]")) {
+          const eltName = ct.name.slice(2);
+          return IR.simpleType(eltName);
+        }
+        if (ct.name === "string") return IR.simpleType("byte");
+        if (ct.isMap && ct.valueType) return ct.valueType;
+      }
+      return undefined;
+    }
+    case "ParenExpr":
+      return inferExprType((expr as IR.IRParenExpr).x, symbols);
+  }
+  return undefined;
+}
+
+/**
+ * Infer an untyped parameter's type by scanning the function body for
+ * characteristic usages. Returns an IRType; defaults to `int` when the body
+ * gives no clear signal.
+ *
+ * Heuristics — once any of these matches, its classification wins because
+ * strongest evidence should dominate:
+ *   - `[]rune(p)` / `[]byte(p)` → `string`
+ *   - `p[i] == rune-literal`, `p[i] - rune-literal`, `p[i] >= rune-literal` → `string`
+ *   - `range p` where iteration var is compared with rune literals → `string`
+ *   - `p` passed to Printf/Println alongside a `%s` in the format → `string`
+ *   - Nested index `p[i][j]` → `[][]int` (best guess; see element hint)
+ *   - `p` as LHS indexing target (`p[k] = v`) or `append(p, v)` → slice,
+ *     element taken from `v` when possible
+ *   - otherwise → `int`
+ */
+function inferParamType(paramName: string, body: IR.IRBlockStmt, symbols: SymbolTable): IR.IRType {
+  let stringVotes = 0;
+  let sliceVotes = 0;
+  let mapVotes = 0;
+  let nestedSlice = false;
+  let sliceElementHint: string | undefined;
+
+  function isTargetIdent(e: IR.IRExpr | undefined): boolean {
+    return !!e && e.kind === "Ident" && (e as IR.IRIdent).name === paramName;
+  }
+
+  // Compare rune literals like 'a' or '0'.
+  function isRuneLit(e: IR.IRExpr | undefined): boolean {
+    return !!e && e.kind === "BasicLit" && (e as IR.IRBasicLit).type === "RUNE";
+  }
+  function isStringLit(e: IR.IRExpr | undefined): boolean {
+    return !!e && e.kind === "BasicLit" && (e as IR.IRBasicLit).type === "STRING";
+  }
+
+  // Record variable names that are guaranteed to be byte/rune because they
+  // came from iterating the param via `range` or from indexing the param.
+  // Usage of these vars with rune literals is strong evidence the param is
+  // a string (since iterating []int would compare with int literals).
+  const runeLikeLocals = new Set<string>();
+
+  // Pass 1: seed runeLikeLocals by checking range/index patterns.
+  function scanIterables(n: IR.IRNode | IR.IRExprStmt): void {
+    if (!n) return;
+    switch (n.kind) {
+      case "BlockStmt":
+        for (const s of (n as IR.IRBlockStmt).stmts) scanIterables(s);
+        return;
+      case "IfStmt": {
+        const i = n as IR.IRIfStmt;
+        if (i.init) scanIterables(i.init);
+        scanIterables(i.body);
+        if (i.else_) scanIterables(i.else_);
+        return;
+      }
+      case "ForStmt": {
+        const f = n as IR.IRForStmt;
+        if (f.init) scanIterables(f.init);
+        if (f.post) scanIterables(f.post);
+        scanIterables(f.body);
+        return;
+      }
+      case "RangeStmt": {
+        const r = n as IR.IRRangeStmt;
+        if (isTargetIdent(r.x)) {
+          // When iterating the param, both loop variables are treated as
+          // "might be rune". We'll confirm or deny via rune-literal comparisons.
+          if (r.key && r.key !== "_") runeLikeLocals.add(r.key);
+          if (r.value && r.value !== "_") runeLikeLocals.add(r.value);
+        }
+        scanIterables(r.body);
+        return;
+      }
+      case "SwitchStmt": {
+        const sw = n as IR.IRSwitchStmt;
+        for (const c of sw.cases) for (const s of c.body) scanIterables(s);
+        return;
+      }
+      case "ShortDeclStmt": {
+        const s = n as IR.IRShortDeclStmt;
+        // `x := p[i]` or `x := p[i] - '0'` → x is byte/rune when p is a string
+        if (s.names.length === 1 && s.values.length === 1) {
+          const rhs = s.values[0];
+          if (exprDerivesFromStringParamChar(rhs)) {
+            runeLikeLocals.add(s.names[0]);
+          }
+        }
+        return;
+      }
+    }
+  }
+
+  // Does the expression compute a byte/rune derived from `paramName[...]`?
+  // Used to mark intermediate locals so that if we later compare them with
+  // rune literals we vote the param as a string.
+  function exprDerivesFromStringParamChar(e: IR.IRExpr): boolean {
+    if (e.kind === "IndexExpr" && isTargetIdent((e as IR.IRIndexExpr).x)) return true;
+    if (e.kind === "BinaryExpr") {
+      const b = e as IR.IRBinaryExpr;
+      if (exprDerivesFromStringParamChar(b.left) || exprDerivesFromStringParamChar(b.right)) return true;
+    }
+    if (e.kind === "CallExpr") {
+      const c = e as IR.IRCallExpr;
+      if (c.func.kind === "Ident") {
+        const fn = (c.func as IR.IRIdent).name;
+        if ((fn === "int" || fn === "byte" || fn === "rune") && c.args.length === 1) {
+          return exprDerivesFromStringParamChar(c.args[0]);
+        }
+      }
+    }
+    if (e.kind === "ParenExpr") return exprDerivesFromStringParamChar((e as IR.IRParenExpr).x);
+    return false;
+  }
+
+  scanIterables(body);
+
+  // Pass 2: collect votes by walking expressions.
+  function walkExpr(e: IR.IRExpr): void {
+    if (!e) return;
+    switch (e.kind) {
+      case "CallExpr": {
+        const c = e as IR.IRCallExpr;
+        // []rune(p), []byte(p) → p is string
+        if (c.func.kind === "ArrayTypeExpr" && c.args.length === 1 && isTargetIdent(c.args[0])) {
+          const eltName = ((c.func as IR.IRArrayTypeExpr).elt as IR.IRIdent | undefined)?.name;
+          if (eltName === "rune" || eltName === "byte") stringVotes += 10;
+        }
+        // string(p) → p is slice
+        if (c.func.kind === "Ident" && (c.func as IR.IRIdent).name === "string" &&
+            c.args.length === 1 && isTargetIdent(c.args[0])) {
+          sliceVotes += 5;
+          sliceElementHint = sliceElementHint || "byte";
+        }
+        // append(p, v) → p is slice; element hinted by v
+        if (c.func.kind === "Ident" && (c.func as IR.IRIdent).name === "append" &&
+            c.args.length >= 1 && isTargetIdent(c.args[0])) {
+          sliceVotes += 5;
+          if (c.args[1]) {
+            const t = inferExprType(c.args[1], symbols);
+            if (t) sliceElementHint = sliceElementHint || t.name;
+          }
+        }
+        // Printf/Println-family with format specifier
+        // Format string is the first STRING literal arg. If `p` appears as a
+        // later arg at the position where %s is specified, the param is string.
+        if (c.func.kind === "SelectorExpr") {
+          const sel = c.func as IR.IRSelectorExpr;
+          const x = sel.x;
+          const method = sel.sel;
+          if (x.kind === "Ident" && (x as IR.IRIdent).name === "fmt" &&
+              (method === "Printf" || method === "Sprintf" || method === "Fprintf" ||
+               method === "Errorf" || method === "Scanf")) {
+            if (c.args.length > 0 && isStringLit(c.args[0])) {
+              const fmtStr = ((c.args[0] as IR.IRBasicLit).value || "").slice(1, -1);
+              // Enumerate format verbs in order.
+              const verbRe = /%[-+# 0]*[\d*]*(?:\.[\d*]+)?([vTtbcdoOqxXUeEfFgGsp])/g;
+              const verbs: string[] = [];
+              let m: RegExpExecArray | null;
+              while ((m = verbRe.exec(fmtStr)) !== null) verbs.push(m[1]);
+              // Each verb maps to arg at index 1 + i.
+              for (let i = 0; i < verbs.length; i++) {
+                const arg = c.args[1 + i];
+                if (!arg) break;
+                if (isTargetIdent(arg)) {
+                  const v = verbs[i];
+                  if (v === "s" || v === "q") stringVotes += 10;
+                  else if (v === "d" || v === "o" || v === "x" || v === "X" ||
+                           v === "b" || v === "c" || v === "U") { /* int-ish, don't vote */ }
+                  else if (v === "f" || v === "e" || v === "E" || v === "g" || v === "G") { /* float */ }
+                  else if (v === "t") { /* bool */ }
+                  else if (v === "v" || v === "T") { /* any — no signal */ }
+                }
+              }
+            }
+          }
+        }
+        for (const a of c.args) walkExpr(a);
+        walkExpr(c.func);
+        return;
+      }
+      case "IndexExpr": {
+        const idx = e as IR.IRIndexExpr;
+        if (isTargetIdent(idx.x)) {
+          // Indexing is strong evidence: param is a slice (or string, but
+          // that's decided separately via rune-literal comparisons).
+          sliceVotes += 3;
+        }
+        // Nested: p[i][j] → p is [][]X. Detect by seeing another IndexExpr whose
+        // `x` is an IndexExpr whose `x` is the param.
+        if (idx.x.kind === "IndexExpr" && isTargetIdent((idx.x as IR.IRIndexExpr).x)) {
+          nestedSlice = true;
+          sliceVotes += 5;
+        }
+        walkExpr(idx.x); walkExpr(idx.index);
+        return;
+      }
+      case "BinaryExpr": {
+        const b = e as IR.IRBinaryExpr;
+        // `p[i] op rune-literal` → p is string
+        if (b.left.kind === "IndexExpr" && isTargetIdent((b.left as IR.IRIndexExpr).x) && isRuneLit(b.right)) {
+          stringVotes += 10;
+        }
+        if (b.right.kind === "IndexExpr" && isTargetIdent((b.right as IR.IRIndexExpr).x) && isRuneLit(b.left)) {
+          stringVotes += 10;
+        }
+        // Compared to string literal → p is string
+        if (isTargetIdent(b.left) && isStringLit(b.right)) stringVotes += 10;
+        if (isTargetIdent(b.right) && isStringLit(b.left)) stringVotes += 10;
+        // `localVar op rune-literal` where localVar came from iterating/indexing p
+        if (b.left.kind === "Ident" && runeLikeLocals.has((b.left as IR.IRIdent).name) && isRuneLit(b.right)) {
+          stringVotes += 8;
+        }
+        if (b.right.kind === "Ident" && runeLikeLocals.has((b.right as IR.IRIdent).name) && isRuneLit(b.left)) {
+          stringVotes += 8;
+        }
+        walkExpr(b.left); walkExpr(b.right);
+        return;
+      }
+      case "UnaryExpr":
+        walkExpr((e as IR.IRUnaryExpr).x); return;
+      case "SelectorExpr":
+        walkExpr((e as IR.IRSelectorExpr).x); return;
+      case "SliceExpr": {
+        const s = e as IR.IRSliceExpr;
+        if (isTargetIdent(s.x)) sliceVotes += 1;
+        walkExpr(s.x); if (s.low) walkExpr(s.low); if (s.high) walkExpr(s.high);
+        return;
+      }
+      case "ParenExpr":
+        walkExpr((e as IR.IRParenExpr).x); return;
+      case "CompositeLit": {
+        const cl = e as IR.IRCompositeLit;
+        for (const el of cl.elts) walkExpr(el);
+        return;
+      }
+      case "KeyValueExpr": {
+        const kv = e as IR.IRKeyValueExpr;
+        walkExpr(kv.key); walkExpr(kv.value);
+        return;
+      }
+    }
+  }
+
+  function walk(n: IR.IRNode | IR.IRExprStmt): void {
+    if (!n) return;
+    switch (n.kind) {
+      case "BlockStmt":
+        for (const s of (n as IR.IRBlockStmt).stmts) walk(s);
+        return;
+      case "ExprStmt":
+        walkExpr((n as IR.IRExprStmt).expr); return;
+      case "AssignStmt": {
+        const a = n as IR.IRAssignStmt;
+        for (const l of a.lhs) {
+          if (l.kind === "IndexExpr" && isTargetIdent((l as IR.IRIndexExpr).x)) {
+            sliceVotes += 3;
+          }
+          // p[i][j] = v → p is [][]X; rhs hints element type
+          if (l.kind === "IndexExpr" && (l as IR.IRIndexExpr).x.kind === "IndexExpr" &&
+              isTargetIdent(((l as IR.IRIndexExpr).x as IR.IRIndexExpr).x)) {
+            nestedSlice = true;
+            sliceVotes += 5;
+          }
+          walkExpr(l);
+        }
+        for (const r of a.rhs) {
+          walkExpr(r);
+          // Element type hint from RHS: `p[i] = v` → element type of v.
+          // (Keep simple: we already get it from inferExprType of RHS.)
+        }
+        return;
+      }
+      case "ShortDeclStmt":
+        for (const v of (n as IR.IRShortDeclStmt).values) walkExpr(v);
+        return;
+      case "IncDecStmt":
+        walkExpr((n as IR.IRIncDecStmt).x); return;
+      case "ReturnStmt":
+        for (const v of (n as IR.IRReturnStmt).values) walkExpr(v);
+        return;
+      case "IfStmt": {
+        const i = n as IR.IRIfStmt;
+        walkExpr(i.cond);
+        walk(i.body);
+        if (i.else_) walk(i.else_);
+        if (i.init) walk(i.init);
+        return;
+      }
+      case "ForStmt": {
+        const f = n as IR.IRForStmt;
+        if (f.init) walk(f.init);
+        if (f.cond) walkExpr(f.cond);
+        if (f.post) walk(f.post);
+        walk(f.body);
+        return;
+      }
+      case "RangeStmt": {
+        const r = n as IR.IRRangeStmt;
+        if (isTargetIdent(r.x)) {
+          // two-var range usually means slice; map is rare in these tests.
+          sliceVotes += 1;
+        }
+        walkExpr(r.x);
+        walk(r.body);
+        return;
+      }
+      case "SwitchStmt": {
+        const sw = n as IR.IRSwitchStmt;
+        if (sw.tag) walkExpr(sw.tag);
+        for (const c of sw.cases) {
+          if (c.values) for (const v of c.values) walkExpr(v);
+          for (const s of c.body) walk(s);
+        }
+        return;
+      }
+      case "VarDecl": {
+        const v = n as IR.IRVarDecl;
+        if (v.value) walkExpr(v.value);
+        return;
+      }
+    }
+  }
+
+  walk(body);
+
+  // Resolution order: strong string signal > nested slice > slice > map > int.
+  if (stringVotes >= 5) return IR.simpleType("string");
+  if (nestedSlice) {
+    const elt = sliceElementHint || "int";
+    return { name: "[][]" + elt, isSlice: true, elementType: { name: "[]" + elt, isSlice: true, elementType: IR.simpleType(elt) } };
+  }
+  if (sliceVotes >= 3) {
+    const elt = sliceElementHint || "int";
+    return { name: "[]" + elt, isSlice: true, elementType: IR.simpleType(elt) };
+  }
+  if (mapVotes > 0) return IR.mapType(IR.simpleType("string"), IR.simpleType("int"));
+  // Final fallback: `int`. Most-common param type in compact AET rosettacode
+  // examples like `factorial(n)`, `gcd(a,b)`, `ackermann(m,n)`.
+  return IR.simpleType("int");
 }
 
 function transformParamList(node: CstNode): IR.IRParam[] {
@@ -193,7 +1276,9 @@ function transformParamList(node: CstNode): IR.IRParam[] {
     const name = tok(p, "Ident") || "_";
     const te = child(p, "typeExpr");
     const isVariadic = tok(p, "Ellipsis") !== undefined;
-    let type = te ? transformTypeExpr(te) : IR.simpleType("interface{}");
+    // Untyped params get a sentinel type that callers (in
+    // transformFuncOrMethodDecl) replace with an inferred type.
+    let type = te ? transformTypeExpr(te) : IR.simpleType(PARAM_INFER_MARKER);
     if (isVariadic) {
       type = { ...type, name: "..." + type.name };
     }
@@ -220,10 +1305,17 @@ function transformTypeExpr(node: CstNode): IR.IRType {
     const inner = child(node, "typeExpr");
     return inner ? IR.pointerType(transformTypeExpr(inner)) : IR.simpleType("*interface{}");
   }
-  // Slice: []type
+  // Slice / fixed array: `[]T` or `[N]T`
   if (tok(node, "LBrack") && tok(node, "RBrack")) {
     const inner = child(node, "typeExpr");
-    return inner ? IR.sliceType(transformTypeExpr(inner)) : IR.sliceType(IR.simpleType("interface{}"));
+    const eltType = inner ? transformTypeExpr(inner) : IR.simpleType("interface{}");
+    const sizeTok = tok(node, "IntLit");
+    if (sizeTok) {
+      // Fixed-size array keeps the `[N]` prefix in its name so the emitter
+      // reproduces the original Go syntax.
+      return { name: `[${sizeTok}]${eltType.name}`, isSlice: true, elementType: eltType };
+    }
+    return IR.sliceType(eltType);
   }
   // Map: map[K]V (also handle v1 abbreviation "Mp")
   if (tok(node, "Map") || tok(node, "Mp")) {
@@ -816,9 +1908,19 @@ function transformPrimaryExpr(node: CstNode): IR.IRExpr {
     return { kind: "CompositeLit", type: typeExpr, elts };
   }
 
-  // Builtins
-  for (const b of ["Make", "Append", "Len", "Cap", "Delete", "Copy", "New"]) {
-    if (tok(node, b)) return { kind: "Ident", name: b.toLowerCase() };
+  // Builtins (full forms and v1 abbreviated forms)
+  // Each entry: [tokenName, goName]
+  const builtinMap: Array<[string, string]> = [
+    ["Make", "make"], ["Mk", "make"],
+    ["Append", "append"], ["Apl", "append"],
+    ["Len", "len"], ["Ln", "len"],
+    ["Cap", "cap"], ["Cp", "cap"],
+    ["Delete", "delete"], ["Dx", "delete"],
+    ["Copy", "copy"], ["Cpy", "copy"],
+    ["New", "new"], ["Nw", "new"],
+  ];
+  for (const [tokName, goName] of builtinMap) {
+    if (tok(node, tokName)) return { kind: "Ident", name: goName };
   }
 
   // Func literal

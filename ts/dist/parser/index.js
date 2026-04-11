@@ -323,6 +323,11 @@ export class AETParser extends CstParser {
                 } },
             { ALT: () => {
                     this.CONSUME(LBrack);
+                    // Fixed-size array: `[N]T`. Optional integer literal inside brackets.
+                    // When absent, the rule matches slice syntax `[]T`. Uses OPTION4
+                    // because OPTION, OPTION2, OPTION3 are already used elsewhere in
+                    // this rule (Func paramList, Func return type, Ident.Ident).
+                    this.OPTION4(() => this.CONSUME(IntLit));
                     this.CONSUME(RBrack);
                     this.SUBRULE2(this.typeExpr);
                 } },
