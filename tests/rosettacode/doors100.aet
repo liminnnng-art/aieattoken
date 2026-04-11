@@ -1,1 +1,1 @@
-main(){doors:=mk([]bool,101);for i:=1;i<=100;i++{for j:=i;j<=100;j+=i{doors[j]=!doors[j]}};for i:=1;i<=100;i++{if doors[i]{pf("Door %d: open\n",i)}}}
+!go-v2;main(){var doors [101]bool;for pass:=1;pass<=100;pass++{for door:=pass;door<=100;door+=pass{doors[door]=!doors[door]}};fmt.Print("Open doors:");for i:=1;i<=100;i++{if doors[i]{pf(" %d",i)}};pl()}

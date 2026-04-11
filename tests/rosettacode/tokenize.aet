@@ -1,1 +1,1 @@
-main(){tokens:=ss("Hello,How,Are,You,Today",",");for _,t:=rng tokens{pl(t)}}
+!go-v2;main(){s:="Hello,How,Are,You,Today";tokens:=ss(s,",");for _,t:=range tokens{pl(t)}}

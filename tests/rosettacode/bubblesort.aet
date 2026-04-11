@@ -1,1 +1,1 @@
-bubbleSort(a){for i:=ln(a)-1;i>=1;i--{for j:=0..i{if a[j]>a[j+1]{t:=a[j];a[j]=a[j+1];a[j+1]=t}}}};main(){a:=mk([]int,0);a=apl(a,5,3,8,4,2,7,1,6);bubbleSort(a);pl(a)}
+!go-v2;bubbleSort(arr){n:=#arr;for i:=0..n-1{for j:=0..n-1-i{if arr[j]>arr[j+1]{arr[j],arr[j+1]=arr[j+1],arr[j]}}}};main(){arr:=[]int{5,3,8,4,2,7,1,6};pl("Before:",arr);bubbleSort(arr);pl("After: ",arr)}

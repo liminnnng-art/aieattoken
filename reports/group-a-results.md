@@ -1,44 +1,29 @@
-# Group A Test Results — RosettaCode Tasks
+# Group A Test Results
 
-Token counts using cl100k_base tokenizer. All 17 programs compile and produce correct output.
-
-| # | Task | Go | J | Clojure | Python | **AET** | **Saving** |
-|---|------|---:|--:|--------:|-------:|--------:|-----------:|
-| 1 | fibonacci | 72 | 43 | 60 | 54 | **56** | **22.2%** |
-| 2 | fizzbuzz | 88 | 77 | 78 | 73 | **58** | **34.1%** |
-| 3 | gcd | 54 | 24 | 44 | 45 | **38** | **29.6%** |
-| 4 | factorial | 73 | 34 | 54 | 35 | **57** | **21.9%** |
-| 5 | sieve | 191 | 32 | 98 | 130 | **114** | **40.3%** |
-| 6 | ackermann | 94 | 104 | 89 | 99 | **71** | **24.5%** |
-| 7 | hanoi | 117 | 130 | 84 | 106 | **77** | **34.2%** |
-| 8 | bubblesort | 144 | 79 | 127 | 116 | **102** | **29.2%** |
-| 9 | binsearch | 198 | 69 | 165 | 170 | **115** | **41.9%** |
-| 10 | caesar | 242 | 203 | 208 | 186 | **135** | **44.2%** |
-| 11 | palindrome | 110 | 54 | 55 | 49 | **94** | **14.5%** |
-| 12 | doors100 | 107 | 35 | 90 | 81 | **70** | **34.6%** |
-| 13 | reverse | 113 | 35 | 42 | 32 | **73** | **35.4%** |
-| 14 | tokenize | 53 | 33 | 38 | 32 | **32** | **39.6%** |
-| 15 | roman | 186 | 201 | 188 | 163 | **150** | **19.4%** |
-| 16 | luhn | 160 | 100 | 143 | 117 | **123** | **23.1%** |
-| 17 | matrix | 218 | 62 | 111 | 112 | **134** | **38.5%** |
-| | **TOTAL** | **2220** | **1315** | **1674** | **1600** | **1499** | **32.5%** |
+| # | Task | Go | J | Clojure | Python | AET | Saving | Output | Round-trip |
+|---|------|---:|--:|--------:|-------:|----:|-------:|--------|-----------|
+| 1 | ackermann | 94 | 104 | 89 | 99 | 75 | 20.2% | PASS | PASS |
+| 2 | binsearch | 198 | 69 | 165 | 170 | 131 | 33.8% | PASS | PASS |
+| 3 | bubblesort | 144 | 79 | 127 | 116 | 101 | 29.9% | PASS | PASS |
+| 4 | caesar | 242 | 203 | 208 | 186 | 194 | 19.8% | PASS | PASS |
+| 5 | doors100 | 107 | 35 | 90 | 81 | 80 | 25.2% | PASS | PASS |
+| 6 | factorial | 73 | 34 | 54 | 35 | 53 | 27.4% | PASS | PASS |
+| 7 | fibonacci | 72 | 43 | 60 | 54 | 48 | 33.3% | PASS | PASS |
+| 8 | fizzbuzz | 88 | 77 | 78 | 73 | 59 | 33.0% | PASS | PASS |
+| 9 | gcd | 54 | 24 | 44 | 45 | 34 | 37.0% | PASS | PASS |
+| 10 | hanoi | 117 | 130 | 84 | 106 | 97 | 17.1% | PASS | PASS |
+| 11 | luhn | 160 | 100 | 143 | 117 | 115 | 28.1% | PASS | PASS |
+| 12 | matrix | 218 | 62 | 111 | 112 | 163 | 25.2% | PASS | PASS |
+| 13 | palindrome | 110 | 54 | 55 | 49 | 78 | 29.1% | PASS | PASS |
+| 14 | reverse | 113 | 35 | 42 | 32 | 94 | 16.8% | PASS | PASS |
+| 15 | roman | 186 | 201 | 188 | 163 | 138 | 25.8% | PASS | PASS |
+| 16 | sieve | 191 | 32 | 98 | 130 | 137 | 28.3% | PASS | PASS |
+| 17 | tokenize | 53 | 33 | 38 | 32 | 36 | 32.1% | PASS | PASS |
 
 ## Summary
 
-- **17/17 programs** compile and produce correct output
-- **17/17 round-trip tests** pass (AET → Go → AET, AST identical)
-
-### Token Savings vs Go
-
-| Language | Total Tokens | Savings vs Go |
-|----------|-------------|---------------|
-| Go | 2220 | baseline |
-| J | 1315 | 40.8% |
-| Clojure | 1674 | 24.6% |
-| Python | 1600 | 27.9% |
-| **AET** | **1499** | **32.5%** |
-
-### Validation
-
-- Transpile correctness: All Go output from AET matches original Go stdout
-- Round-trip: AET → IR → AET produces identical AST on re-parse
+- Tests: 17/17 output match
+- Round-trip: 17/17 pass
+- Total Go tokens: 2220
+- Total AET tokens: 1633
+- **Overall savings: 26.4%**

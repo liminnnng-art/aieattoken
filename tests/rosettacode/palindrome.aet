@@ -1,1 +1,1 @@
-isPalindrome(s){runes:=[]rune(s);for i,j:=0,ln(runes)-1;i<j;i,j=i+1,j-1{if runes[i]!=runes[j]{false}};true};main(){words:=[]string{"racecar","hello","level","madam"};for _,w:=rng words{pf("%s: %v\n",w,isPalindrome(w))}}
+!go-v2;isPalindrome(s:string){n:=#s;for i:=0..n/2{if s[i]!=s[n-1-i]{false}};true};main(){words:=[]string{"racecar","hello","level","madam"};for _,w:=range words{pf("%s: %t\n",w,isPalindrome(w))}}

@@ -1,1 +1,1 @@
-reverse(s){runes:=[]rune(s);for i,j:=0,ln(runes)-1;i<j;i,j=i+1,j-1{runes[i],runes[j]=runes[j],runes[i]};string(runes)};main(){pl(reverse("Hello, World!"))}
+!go-v2;reverseString(s){runes:=[]rune(s);for i,j:=0,#runes-1;i<j;i,j=i+1,j-1{runes[i],runes[j]=runes[j],runes[i]};string(runes)};main(){s:="Hello, World!";pf("Original: %s\n",s);pf("Reversed: %s\n",reverseString(s))}
