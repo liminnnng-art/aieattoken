@@ -1987,6 +1987,82 @@ function irTypeToJavaName(t) {
     return stripWildcards(name);
 }
 // ---------------------------------------------------------------------------
+// VarDecl generics helpers — used to eliminate `var name:Type<X,Y> =expr` leak
+// ---------------------------------------------------------------------------
+/**
+ * Try to embed the LHS generic type onto the RHS constructor call so the `var`
+ * declaration can drop its `:Type<...>` annotation.
+ *
+ * Returns the embedded RHS AETJ string, or `null` if not applicable.
+ *
+ * Only fires when the RHS constructor's base name equals the LHS type's base
+ * name — that guarantees round-trip safety (no silent upcast).
+ */
+function tryEmbedGenericsInCtorCall(value, lhsType) {
+    const lhsName = irTypeToJavaName(lhsType);
+    const baseMatch = lhsName.match(/^([A-Z][A-Za-z0-9_]*)</);
+    if (!baseMatch)
+        return null;
+    const lhsBase = baseMatch[1];
+    // Strip the spaces after commas in the witness to save the extra ` ` token
+    // produced by the tokenizer on ` Integer` / ` List<` etc.
+    const lhsNoSpace = lhsName.replace(/,\s+/g, ",");
+    // Case 1: RHS is Java_NewExpr — the node that covers both `new X<>()` and `X()`
+    if (value.kind === "Java_NewExpr") {
+        const ne = value;
+        const rhsTypeName = ne.type?.name || "";
+        const rhsBaseMatch = rhsTypeName.match(/^([A-Z][A-Za-z0-9_]*)/);
+        if (rhsBaseMatch && rhsBaseMatch[1] === lhsBase) {
+            const args = ne.args.map(aetjExpr).join(",");
+            return `${lhsNoSpace}(${args})`;
+        }
+    }
+    // Case 2: RHS is a plain CallExpr whose func is an Ident matching the base
+    // (after new-elision, uppercase constructor calls look like `Foo(args)`).
+    if (value.kind === "CallExpr") {
+        const call = value;
+        if (call.func.kind === "Ident" && call.func.name === lhsBase) {
+            const args = call.args.map(aetjExpr).join(",");
+            return `${lhsNoSpace}(${args})`;
+        }
+    }
+    return null;
+}
+/**
+ * Determine whether the RHS is a true method call whose declared return type
+ * carries the generic type info — safe to drop the LHS annotation because
+ * Java's `var` infers from the return type.
+ *
+ * Excludes the Go-style builtin placeholders (`mk`/`make`, `nw`/`new`, `len`,
+ * etc.) which the Java emitter expands to `new Foo<>()` and friends, losing
+ * the target-type context when the LHS annotation goes away.
+ */
+const GO_BUILTIN_CALL_NAMES = new Set([
+    "mk", "make", "nw", "new", "apl", "append", "dx", "delete",
+    "ln", "len", "cp", "cap", "_t", "panic", "println", "print",
+    "string", "int", "int64", "float64", "float32", "byte", "rune", "close",
+]);
+function rhsIsMethodCall(value) {
+    if (value.kind !== "CallExpr")
+        return false;
+    const call = value;
+    if (call.func.kind === "Ident") {
+        const name = call.func.name;
+        if (!name || !/^[a-z]/.test(name))
+            return false;
+        // Exclude Go builtins that the Java emitter rewrites to `new X<>(...)`:
+        // they need the LHS target type to infer the diamond generics.
+        if (GO_BUILTIN_CALL_NAMES.has(name))
+            return false;
+        return true;
+    }
+    // Selector expression like obj.method — always a method call
+    if (call.func.kind === "SelectorExpr") {
+        return true;
+    }
+    return false;
+}
+// ---------------------------------------------------------------------------
 // AET-Java constructor auto-generation detection
 // ---------------------------------------------------------------------------
 /** Check if a constructor body is ALL `this.x = x` assignments (auto-generatable). */
@@ -2132,9 +2208,28 @@ function aetjNode(node) {
             return node.tok;
         case "VarDecl": {
             if (node.value) {
-                // Include explicit type annotation when it's a parameterized/generic type (e.g., GenericStack<Integer>)
-                // Format: var name:Type =expr  (space before = to prevent >= tokenization issue)
+                // When the declared type is generic (e.g. GenericStack<Integer>), try to
+                // eliminate the `:Type` annotation to use the much cheaper `name:=expr` form.
+                // Two safe opportunities:
+                //   1. RHS is a constructor call whose base name matches the LHS base name
+                //      → push the generic type witness onto the RHS call. Round-trip safe
+                //      because the LHS and RHS refer to the same concrete type.
+                //   2. RHS is a method call (lowercase name or obj.method())
+                //      → drop the annotation entirely; Java's `var` infers from the return type.
                 if (node.type && node.type.name && node.type.name.includes("<")) {
+                    const pushed = tryEmbedGenericsInCtorCall(node.value, node.type);
+                    if (pushed !== null) {
+                        if (_inMethodBody)
+                            return `${node.name}:=${pushed}`;
+                        return `var ${node.name}=${pushed}`;
+                    }
+                    if (rhsIsMethodCall(node.value)) {
+                        if (_inMethodBody)
+                            return `${node.name}:=${aetjExpr(node.value)}`;
+                        return `var ${node.name}=${aetjExpr(node.value)}`;
+                    }
+                    // Fallback: keep the type annotation when the RHS cannot carry the type
+                    // (e.g. upcast `Map<String,Integer> counts = new HashMap<>()`).
                     return `var ${node.name}:${irTypeToJavaName(node.type)} =${aetjExpr(node.value)}`;
                 }
                 // Inside method bodies: use := (saves 1 token vs 'var name=')
