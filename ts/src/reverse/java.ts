@@ -132,7 +132,9 @@ function javaTypeNodeName(node: any): string {
   if (node.Kind === "ArrayType") return javaTypeNodeName(node.ElemType) + "[]";
   if (node.Kind === "ParameterizedType") {
     const base = javaTypeNodeName(node.Type);
-    const args = (node.TypeArgs || []).map(javaTypeNodeName).join(", ");
+    // Use comma without space inside type args — saves one cl100k_base token
+    // per multi-arg generic (`Map<K, V>` is 5 tokens, `Map<K,V>` is 4).
+    const args = (node.TypeArgs || []).map(javaTypeNodeName).join(",");
     return args ? `${base}<${args}>` : base;
   }
   if (node.Kind === "Wildcard") {
@@ -184,7 +186,7 @@ function mapJavaType(node: any): IR.IRType {
       }
       // Preserve full parameterized type name (e.g., Class<? extends Exception>)
       if (typeArgs.length > 0) {
-        const argNames = typeArgs.map(javaTypeNodeName).join(", ");
+        const argNames = typeArgs.map(javaTypeNodeName).join(",");
         return IR.simpleType(`${baseName}<${argNames}>`);
       }
       return IR.simpleType(baseName);
@@ -255,9 +257,11 @@ export function javaAstToIR(javaAst: any): IR.IRProgram {
 
 function convertClassDecl(node: any, out: IR.IRNode[]): void {
   let name: string = node.Name || "";
-  // Append type parameters to name if present (e.g., GenericStack<T>)
+  // Append type parameters to name if present (e.g., GenericStack<T>).
+  // Use comma without space — saves one cl100k_base token per multi-param
+  // class declaration (`@KVStore<K, V>` -> `@KVStore<K,V>`).
   const tps = (node.TypeParams || []).map((tp: any) => tp.Name || tp);
-  if (tps.length > 0) name += "<" + tps.join(", ") + ">";
+  if (tps.length > 0) name += "<" + tps.join(",") + ">";
   const members: any[] = node.Body || [];
 
   const methods = members.filter((m: any) => m.Kind === "MethodDecl");
@@ -380,10 +384,10 @@ function convertClassToJavaClassDecl(node: any): IR.Java_ClassDecl {
     return field;
   });
 
-  // Include type parameters in the name
+  // Include type parameters in the name (no-space comma — token saving)
   let fullName = node.Name || "";
   const tps = (node.TypeParams || []).map((tp: any) => tp.Name || tp);
-  if (tps.length > 0) fullName += "<" + tps.join(", ") + ">";
+  if (tps.length > 0) fullName += "<" + tps.join(",") + ">";
 
   // Save and reset anon class accumulator before processing methods
   const savedAnon = _pendingAnonClasses;
@@ -493,10 +497,10 @@ function convertInterfaceDecl(node: any): IR.IRInterfaceDecl {
     }
   }
 
-  // Append type parameters to name (e.g., Validator<T>)
+  // Append type parameters to name (no-space comma — token saving)
   let name = node.Name || "";
   const tps = (node.TypeParams || []).map((tp: any) => tp.Name || tp);
-  if (tps.length > 0) name += "<" + tps.join(", ") + ">";
+  if (tps.length > 0) name += "<" + tps.join(",") + ">";
 
   return { kind: "InterfaceDecl", name, methods, stmtIndex: 0 };
 }

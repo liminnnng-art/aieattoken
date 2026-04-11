@@ -125,7 +125,9 @@ function javaTypeNodeName(node) {
         return javaTypeNodeName(node.ElemType) + "[]";
     if (node.Kind === "ParameterizedType") {
         const base = javaTypeNodeName(node.Type);
-        const args = (node.TypeArgs || []).map(javaTypeNodeName).join(", ");
+        // Use comma without space inside type args — saves one cl100k_base token
+        // per multi-arg generic (`Map<K, V>` is 5 tokens, `Map<K,V>` is 4).
+        const args = (node.TypeArgs || []).map(javaTypeNodeName).join(",");
         return args ? `${base}<${args}>` : base;
     }
     if (node.Kind === "Wildcard") {
@@ -177,7 +179,7 @@ function mapJavaType(node) {
             }
             // Preserve full parameterized type name (e.g., Class<? extends Exception>)
             if (typeArgs.length > 0) {
-                const argNames = typeArgs.map(javaTypeNodeName).join(", ");
+                const argNames = typeArgs.map(javaTypeNodeName).join(",");
                 return IR.simpleType(`${baseName}<${argNames}>`);
             }
             return IR.simpleType(baseName);
@@ -249,10 +251,12 @@ export function javaAstToIR(javaAst) {
 // ---------------------------------------------------------------------------
 function convertClassDecl(node, out) {
     let name = node.Name || "";
-    // Append type parameters to name if present (e.g., GenericStack<T>)
+    // Append type parameters to name if present (e.g., GenericStack<T>).
+    // Use comma without space — saves one cl100k_base token per multi-param
+    // class declaration (`@KVStore<K, V>` -> `@KVStore<K,V>`).
     const tps = (node.TypeParams || []).map((tp) => tp.Name || tp);
     if (tps.length > 0)
-        name += "<" + tps.join(", ") + ">";
+        name += "<" + tps.join(",") + ">";
     const members = node.Body || [];
     const methods = members.filter((m) => m.Kind === "MethodDecl");
     const constructors = members.filter((m) => m.Kind === "ConstructorDecl");
@@ -366,11 +370,11 @@ function convertClassToJavaClassDecl(node) {
             field.javaInit = convertExpr(f.Init);
         return field;
     });
-    // Include type parameters in the name
+    // Include type parameters in the name (no-space comma — token saving)
     let fullName = node.Name || "";
     const tps = (node.TypeParams || []).map((tp) => tp.Name || tp);
     if (tps.length > 0)
-        fullName += "<" + tps.join(", ") + ">";
+        fullName += "<" + tps.join(",") + ">";
     // Save and reset anon class accumulator before processing methods
     const savedAnon = _pendingAnonClasses;
     _pendingAnonClasses = [];
@@ -454,11 +458,11 @@ function convertInterfaceDecl(node) {
             });
         }
     }
-    // Append type parameters to name (e.g., Validator<T>)
+    // Append type parameters to name (no-space comma — token saving)
     let name = node.Name || "";
     const tps = (node.TypeParams || []).map((tp) => tp.Name || tp);
     if (tps.length > 0)
-        name += "<" + tps.join(", ") + ">";
+        name += "<" + tps.join(",") + ">";
     return { kind: "InterfaceDecl", name, methods, stmtIndex: 0 };
 }
 function convertEnumDecl(node) {
