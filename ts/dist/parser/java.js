@@ -714,6 +714,17 @@ export class AETJavaParser extends CstParser {
         this.CONSUME(For);
         this.CONSUME(LParen);
         this.OR([
+            // Range sugar: (Ident ('<' | '<=') expr)
+            // Sugar for `int i = 0; i < expr; i++` — auto-declares Ident at 0,
+            // auto-increments by 1, exclusive (`<`) or inclusive (`<=`).
+            { GATE: () => this.isRangeFor(), ALT: () => {
+                    this.CONSUME3(Ident);
+                    this.OR4([
+                        { ALT: () => this.CONSUME(Lt) },
+                        { ALT: () => this.CONSUME(Leq) },
+                    ]);
+                    this.SUBRULE4(this.expr);
+                } },
             // Enhanced for-each with type: (Type Ident ':' expr)
             { GATE: () => this.isForEach() && this.isForEachTyped(), ALT: () => {
                     this.SUBRULE(this.typeExpr);
@@ -739,6 +750,18 @@ export class AETJavaParser extends CstParser {
         this.CONSUME(RParen);
         this.SUBRULE(this.block);
     });
+    // Detect range-for sugar: lookahead is `Ident '<' ...` or `Ident '<=' ...`
+    // (and not `Ident ':' ...` which is for-each, nor `Ident ;` which is
+    //  a degenerate traditional for like `for(i;cond;post)`).
+    isRangeFor() {
+        const t1 = this.LA(1);
+        if (!t1 || !tokenMatcher(t1, Ident))
+            return false;
+        const t2 = this.LA(2);
+        if (!t2)
+            return false;
+        return tokenMatcher(t2, Lt) || tokenMatcher(t2, Leq);
+    }
     // Detect for-each: scan inside parens for ':' not preceded by ';'
     isForEach() {
         let depth = 1; // already consumed '('

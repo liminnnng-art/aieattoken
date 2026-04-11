@@ -124,6 +124,7 @@ export declare class AETJavaParser extends CstParser {
     private stmt;
     private ifStmt;
     private forStmt;
+    private isRangeFor;
     private isForEach;
     private isForEachTyped;
     private forInit;

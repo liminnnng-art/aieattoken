@@ -769,6 +769,37 @@ function transformForStmt(node) {
     const exprs = children(node, "expr");
     const blocks = children(node, "block");
     const body = blocks.length > 0 ? transformBlock(blocks[blocks.length - 1]) : { kind: "BlockStmt", stmts: [] };
+    // Check for range-for sugar: `for(i<n)` or `for(i<=n)` — translates to a
+    // traditional for loop with auto-declared/incremented index variable.
+    // Distinguished from for-each by the presence of `Lt` or `Leq` instead of
+    // `Colon`, and from traditional for by the absence of `Semi`.
+    if ((tok(node, "Lt") || tok(node, "Leq")) && !tok(node, "Semi")) {
+        const varName = idents[0];
+        const inclusive = !!tok(node, "Leq");
+        const upper = exprs[0] ? transformExpr(exprs[0]) : { kind: "Ident", name: "_" };
+        // Build init: var name = 0  (transformer creates ShortDeclStmt for `:=`)
+        const init = {
+            kind: "ShortDeclStmt",
+            names: [varName],
+            values: [{ kind: "BasicLit", type: "INT", value: "0" }],
+            stmtIndex: si,
+        };
+        // Build cond: name < upper  (or <= upper)
+        const cond = {
+            kind: "BinaryExpr",
+            op: inclusive ? "<=" : "<",
+            left: { kind: "Ident", name: varName },
+            right: upper,
+        };
+        // Build post: name++
+        const post = {
+            kind: "IncDecStmt",
+            x: { kind: "Ident", name: varName },
+            op: "++",
+            stmtIndex: si,
+        };
+        return { kind: "ForStmt", init, cond, post, body, stmtIndex: si };
+    }
     // Check for enhanced for-each: has Colon token
     if (tok(node, "Colon")) {
         // Enhanced for-each
