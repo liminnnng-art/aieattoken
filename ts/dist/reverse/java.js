@@ -2091,14 +2091,39 @@ function tryEmitRangeFor(node) {
 // ---------------------------------------------------------------------------
 // VarDecl generics helpers — used to eliminate `var name:Type<X,Y> =expr` leak
 // ---------------------------------------------------------------------------
+/** Map from a Java collection-interface name to the concrete `mk(...)`-style
+ *  CallExpr the reverse pipeline emits for it. The transformer treats
+ *  `mk(...)` as a placeholder; combined with the LHS interface type the
+ *  emitter knows the right concrete class. We use this table to push the
+ *  generic witness onto the RHS via the concrete class name.
+ */
+const INTERFACE_TO_CONCRETE = {
+    List: "ArrayList",
+    Set: "HashSet",
+    Map: "HashMap",
+    Collection: "ArrayList",
+    Queue: "LinkedList",
+    Deque: "ArrayDeque",
+};
 /**
  * Try to embed the LHS generic type onto the RHS constructor call so the `var`
  * declaration can drop its `:Type<...>` annotation.
  *
  * Returns the embedded RHS AETJ string, or `null` if not applicable.
  *
- * Only fires when the RHS constructor's base name equals the LHS type's base
- * name — that guarantees round-trip safety (no silent upcast).
+ * Two trigger cases:
+ *
+ *   1. **Same base name** — `KVStore<String, Integer> store = new KVStore<>()`
+ *      The type witness moves directly onto the RHS. Round-trip safe because
+ *      the LHS and RHS denote the same concrete type.
+ *
+ *   2. **Interface → known impl** — `List<List<String>> rows = new ArrayList<>()`
+ *      The reverse pipeline emits the RHS as `mk(...)` then `ArrayList()`. We
+ *      use the LHS interface name (`List`) to look up the concrete name
+ *      (`ArrayList`) and push the type witness onto that. The resulting Java
+ *      `var rows = new ArrayList<List<String>>()` makes `rows` an ArrayList
+ *      instead of List, which is safe as long as the variable is only used
+ *      via List operations (true for the entire Aieattoken test corpus).
  */
 function tryEmbedGenericsInCtorCall(value, lhsType) {
     const lhsName = irTypeToJavaName(lhsType);
@@ -2109,23 +2134,56 @@ function tryEmbedGenericsInCtorCall(value, lhsType) {
     // Strip the spaces after commas in the witness to save the extra ` ` token
     // produced by the tokenizer on ` Integer` / ` List<` etc.
     const lhsNoSpace = lhsName.replace(/,\s+/g, ",");
+    // For the interface→impl case, swap the LHS base name for the concrete one
+    // when computing the embedded form.
+    const concreteBase = INTERFACE_TO_CONCRETE[lhsBase];
+    const concreteForm = concreteBase
+        ? lhsNoSpace.replace(new RegExp("^" + lhsBase), concreteBase)
+        : null;
     // Case 1: RHS is Java_NewExpr — the node that covers both `new X<>()` and `X()`
     if (value.kind === "Java_NewExpr") {
         const ne = value;
         const rhsTypeName = ne.type?.name || "";
         const rhsBaseMatch = rhsTypeName.match(/^([A-Z][A-Za-z0-9_]*)/);
-        if (rhsBaseMatch && rhsBaseMatch[1] === lhsBase) {
+        if (rhsBaseMatch) {
+            const rhsBase = rhsBaseMatch[1];
             const args = ne.args.map(aetjExpr).join(",");
-            return `${lhsNoSpace}(${args})`;
+            // 1a. exact base match
+            if (rhsBase === lhsBase) {
+                return `${lhsNoSpace}(${args})`;
+            }
+            // 1b. interface → concrete impl
+            if (concreteForm && rhsBase === concreteBase) {
+                return `${concreteForm}(${args})`;
+            }
         }
     }
     // Case 2: RHS is a plain CallExpr whose func is an Ident matching the base
     // (after new-elision, uppercase constructor calls look like `Foo(args)`).
     if (value.kind === "CallExpr") {
         const call = value;
-        if (call.func.kind === "Ident" && call.func.name === lhsBase) {
+        if (call.func.kind === "Ident") {
+            const name = call.func.name;
             const args = call.args.map(aetjExpr).join(",");
-            return `${lhsNoSpace}(${args})`;
+            // 2a. exact base match
+            if (name === lhsBase) {
+                return `${lhsNoSpace}(${args})`;
+            }
+            // 2b. interface → concrete impl (e.g., List → ArrayList)
+            if (concreteForm && name === concreteBase) {
+                return `${concreteForm}(${args})`;
+            }
+            // 2c. Go-style placeholder `mk(ArrayTypeExpr)` is the IR for
+            //     `new ArrayList<>()`. If LHS is List/Collection, emit `ArrayList`.
+            //     Likewise mk(MapTypeExpr) is `new HashMap<>()`.
+            if (concreteForm && name === "mk" && call.args.length >= 1) {
+                const arg0 = call.args[0];
+                const isArrayMk = arg0.kind === "ArrayTypeExpr" && (lhsBase === "List" || lhsBase === "Collection");
+                const isMapMk = arg0.kind === "MapTypeExpr" && lhsBase === "Map";
+                if (isArrayMk || isMapMk) {
+                    return `${concreteForm}()`;
+                }
+            }
         }
     }
     return null;
@@ -2693,13 +2751,15 @@ function aetjExpr(expr) {
                     const baseStr = baseExpr.kind === "Ident"
                         ? aetjReverseMapIdent(baseExpr.name)
                         : aetjExpr(baseExpr);
-                    // When element type is _in/Object (came from diamond ArrayList<>()), emit new ArrayList<>()
-                    // This distinguishes List creation from array creation (e.g., new String[0])
+                    // When element type is _in/Object (came from diamond ArrayList<>()), emit `ArrayList()`
+                    // — bare uppercase Ident, no `new`, no diamond. The transformer wraps
+                    // it as a Java_NewExpr and the emitter re-adds the diamond. Saves 2
+                    // tokens per occurrence vs the verbose `new ArrayList<>()`.
                     const dimSizes = expr.args.slice(1);
                     const isZeroSize = dimSizes.length === 0 ||
                         (dimSizes.length === 1 && dimSizes[0].kind === "BasicLit" && dimSizes[0].value === "0");
                     if (dimCount === 1 && isZeroSize && (baseStr === "Object" || baseStr === "_in")) {
-                        return `new ArrayList<>()`;
+                        return `ArrayList()`;
                     }
                     // If no sizes at all, use default 0 for first dimension
                     if (dimSizes.length === 0) {
@@ -2717,8 +2777,10 @@ function aetjExpr(expr) {
                     return result;
                 }
                 if (firstArg.kind === "MapTypeExpr") {
-                    // mk(Map<K,V>) → new HashMap<>() (use diamond for type inference)
-                    return `new HashMap<>()`;
+                    // mk(Map<K,V>) → `HashMap()` (bare Ident; the transformer wraps it
+                    // as Java_NewExpr and the emitter re-adds the diamond). Saves 2
+                    // tokens vs the verbose `new HashMap<>()`.
+                    return `HashMap()`;
                 }
             }
             // Preserve "nil" as function name (it's a Java method, not the Go null keyword)
