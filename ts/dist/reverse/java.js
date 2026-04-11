@@ -1357,16 +1357,14 @@ function convertMethodCall(node) {
         // Return as index expression instead
         return { kind: "CallExpr", func: convertExpr(method), args };
     }
-    // Rename method names that clash with AET parser keywords
+    // Rename method names that clash with the AET-Java parser's keyword tokens.
+    // Of the original Go-style rename list only `new` is an actual keyword
+    // conflict in AET-Java (the rest — append/delete/copy/make/filter/range —
+    // are normal identifiers in this lexer). The unnecessary renames cost
+    // tokens in cl100k_base because e.g. `.append` is 1 token but `.apd` is 2.
     if (method?.Kind === "FieldAccess") {
         const KEYWORD_METHOD_RENAMES = Object.create(null);
-        KEYWORD_METHOD_RENAMES["append"] = "apd";
-        KEYWORD_METHOD_RENAMES["delete"] = "del";
-        KEYWORD_METHOD_RENAMES["copy"] = "cpy";
         KEYWORD_METHOD_RENAMES["new"] = "nw_";
-        KEYWORD_METHOD_RENAMES["make"] = "mk_";
-        KEYWORD_METHOD_RENAMES["filter"] = "flt_";
-        KEYWORD_METHOD_RENAMES["range"] = "rng_";
         const renamed = KEYWORD_METHOD_RENAMES[method.Name];
         if (renamed) {
             const obj = convertExpr(method.Expr);
