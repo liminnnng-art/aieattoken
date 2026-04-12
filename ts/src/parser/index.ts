@@ -81,6 +81,8 @@ export const Shr = createToken({ name: "Shr", pattern: />>/ });
 export const Inc = createToken({ name: "Inc", pattern: /\+\+/ });
 export const Dec = createToken({ name: "Dec", pattern: /--/ });
 export const Ellipsis = createToken({ name: "Ellipsis", pattern: /\.\.\./ });
+// `..=` must be matched BEFORE `..` since both share the dotdot prefix.
+export const DotDotEq = createToken({ name: "DotDotEq", pattern: /\.\.=/ });
 export const DotDot = createToken({ name: "DotDot", pattern: /\.\./ });
 export const Plus = createToken({ name: "Plus", pattern: /\+/, longer_alt: undefined });
 export const Minus = createToken({ name: "Minus", pattern: /-/, longer_alt: undefined });
@@ -151,8 +153,8 @@ export const WS = createToken({ name: "WS", pattern: /[\s\t\n\r]+/, group: Lexer
 // QuestionBang before Question, Ellipsis before Dot, etc.
 const allTokens = [
   WS,
-  // Multi-char operators (longer first)
-  VersionMarker, QuestionBang, Ellipsis, DotDot, Arrow, ChanArrow, ShortDecl,
+  // Multi-char operators (longer first: Ellipsis before DotDotEq before DotDot)
+  VersionMarker, QuestionBang, Ellipsis, DotDotEq, DotDot, Arrow, ChanArrow, ShortDecl,
   ShlAssign, ShrAssign, AndAssign, OrAssign, XorAssign,
   PlusAssign, MinusAssign, MulAssign, DivAssign, ModAssign,
   LogAnd, LogOr, Eq, Neq, Leq, Geq, Shl, Shr, Inc, Dec,
@@ -535,12 +537,16 @@ export class AETParser extends CstParser {
         this.SUBRULE(this.stmtList);
         this.CONSUME(RBrace);
       }},
-      // for i:=start..end { ... } (numeric range)
+      // for i:=start..end { ... } (exclusive numeric range, i < end)
+      // for i:=start..=end { ... } (inclusive numeric range, i <= end)
       { GATE: () => this.isDotDotFor(), ALT: () => {
         this.CONSUME2(Ident);             // loop var
         this.CONSUME2(ShortDecl);
         this.SUBRULE4(this.expr);          // start
-        this.CONSUME(DotDot);
+        this.OR4([
+          { ALT: () => this.CONSUME(DotDotEq) },
+          { ALT: () => this.CONSUME(DotDot) },
+        ]);
         this.SUBRULE5(this.expr);          // end
         this.noCompositeLit = false;
         this.CONSUME4(LBrace);
@@ -576,7 +582,7 @@ export class AETParser extends CstParser {
       const t = this.LA(i);
       if (!t) break;
       if (tokenMatcher(t, LBrace)) break;
-      if (tokenMatcher(t, DotDot)) return true;
+      if (tokenMatcher(t, DotDot) || tokenMatcher(t, DotDotEq)) return true;
       i++;
     }
     return false;

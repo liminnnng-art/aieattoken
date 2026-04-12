@@ -997,6 +997,34 @@ function convertLocalVarDecl(node: any): IR.IRNode {
         stmtIndex: 0,
       } as IR.IRVarDecl;
     }
+    // If the declared type is a primitive that differs from the literal's
+    // natural type (e.g. `double total = 0` where `0` is an int literal),
+    // use VarDecl with explicit type. Otherwise `var total = 0` in Java
+    // infers `int`, breaking accumulation into `double`.
+    const declaredType = node.Type?.Name || node.Type?.Kind;
+    if (declaredType && value.kind === "BasicLit") {
+      const litType = (value as IR.IRBasicLit).type;
+      // Widen int literal to double/float when the declared type demands it.
+      if ((declaredType === "double" || declaredType === "float") && litType === "INT") {
+        return {
+          kind: "VarDecl",
+          name: node.Name || "_",
+          type: IR.simpleType(declaredType),
+          value,
+          stmtIndex: 0,
+        } as IR.IRVarDecl;
+      }
+      // long variable initialised with int literal: keep explicit type.
+      if (declaredType === "long" && litType === "INT") {
+        return {
+          kind: "VarDecl",
+          name: node.Name || "_",
+          type: IR.simpleType("long"),
+          value,
+          stmtIndex: 0,
+        } as IR.IRVarDecl;
+      }
+    }
     return {
       kind: "ShortDeclStmt",
       names: [node.Name || "_"],
@@ -2000,8 +2028,9 @@ function javaExprToAET(expr: IR.IRExpr): string {
 // javaIrToAETJ — convert IR to AET-Java (.aetj) string
 // ===========================================================================
 
-// Module-level state: parameter names that shadow fields in current constructor body.
-// When non-empty, we are inside a constructor body and must keep `this.` for shadowed names.
+// Module-level state: parameter names that shadow fields in current method or
+// constructor body. When non-empty, we must keep `this.` for names in this set
+// to avoid self-assignment bugs like `invoiceNumber = invoiceNumber` in setters.
 let _ctorParamNames: Set<string> = new Set();
 
 // Module-level flag: true when emitting inside a method/constructor body.
@@ -2629,7 +2658,20 @@ function aetjNode(node: IR.IRNode | IR.IRExprStmt): string {
           return `var ${node.name}:${irTypeToJavaName(node.type)} =${aetjExpr(node.value)}`;
         }
         // Inside method bodies: use := (saves 1 token vs 'var name=')
+        // Preserve type annotation when the value is a literal whose natural
+        // type differs from the declared type (e.g. `double total = 0` must
+        // become `var total:double=0`, not `total:=0` which infers int).
         if (_inMethodBody) {
+          if (node.type && node.value.kind === "BasicLit") {
+            const tn = node.type.name;
+            const lt = (node.value as IR.IRBasicLit).type;
+            if ((tn === "double" || tn === "float") && lt === "INT") {
+              return `var ${node.name}:${tn}=${aetjExpr(node.value)}`;
+            }
+            if (tn === "long" && lt === "INT") {
+              return `var ${node.name}:${tn}=${aetjExpr(node.value)}`;
+            }
+          }
           return `${node.name}:=${aetjExpr(node.value)}`;
         }
         return `var ${node.name}=${aetjExpr(node.value)}`;
@@ -2924,10 +2966,12 @@ function aetjStructAsClass(node: IR.IRStructDecl): string {
 }
 
 function aetjStructAsClassWithMethods(node: IR.IRStructDecl, methods: IR.IRFuncDecl[]): string {
-  // Emit as a class with fields AND receiver methods inside the body
+  // Emit as a class with fields AND receiver methods inside the body.
   let s = `@${node.name}{`;
   const bodyParts: string[] = [];
-  // Fields
+  // Fields: use `!` prefix (maps to `private final` through the emitter's
+  // tag-based modifier system). This ensures the emitter auto-generates the
+  // all-args constructor for data classes.
   for (const f of node.fields) {
     const typeName = aetjFieldTypeName(f);
     bodyParts.push(`!${typeName} ${f.name}`);

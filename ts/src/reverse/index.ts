@@ -431,13 +431,652 @@ function exprName(expr: IR.IRExpr): string {
   return "_";
 }
 
+// Program-level signature registry used during emission so that per-function
+// analysis (e.g. cross-function type elision) can look up sibling functions'
+// signatures. Set at the top of `irToAET` and cleared on exit.
+let globalFuncSigs: Map<string, IR.IRFuncDecl> = new Map();
+
+// Per-callee aggregated argument types collected from every call site in
+// the program. Used by the reverse's type-elision pass to know when a
+// parameter can be safely dropped because a caller provides a typed
+// argument at that position (the forward's cross-function propagation will
+// pick it up). Map: calleeName → array indexed by position of the "most
+// specific agreed-upon type" across call sites (or undefined if sites
+// disagree / no signal).
+let globalCallSiteArgTypes: Map<string, (IR.IRType | undefined)[]> = new Map();
+
+// Pre-computed per-function elision data (computed before identifier
+// shortening so original names are available for call-site lookup).
+let precomputedElidable: Map<string, boolean[]> = new Map();
+let precomputedReturnElide: Map<string, boolean> = new Map();
+let precomputedBody: Map<string, IR.IRBlockStmt> = new Map();
+
 // Convert IR to AET string
 export function irToAET(program: IR.IRProgram): string {
-  const parts: string[] = ["!go-v2"];
+  globalFuncSigs = new Map();
+  for (const decl of program.decls) {
+    if (decl.kind === "FuncDecl") {
+      globalFuncSigs.set((decl as IR.IRFuncDecl).name, decl as IR.IRFuncDecl);
+    }
+  }
+  globalCallSiteArgTypes = computeCallSiteArgTypes(program.decls);
+
+  // Pre-compute per-function type elision and return-type elision BEFORE
+  // identifier shortening, so the analysis can use the original function
+  // names to look up signatures and call-site hints. The results are stored
+  // in maps keyed by original function name and consumed during emission.
+  precomputedElidable = new Map();
+  precomputedReturnElide = new Map();
+  precomputedBody = new Map();
+  for (const decl of program.decls) {
+    if (decl.kind !== "FuncDecl") continue;
+    const fn = decl as IR.IRFuncDecl;
+    precomputedElidable.set(fn.name, computeElidableParams(fn.name, fn.params, fn.body));
+    precomputedReturnElide.set(fn.name, canElideReturnType(fn.results, fn.body));
+    if (precomputedReturnElide.get(fn.name)) {
+      precomputedBody.set(fn.name, bodyWithImplicitReturns(fn.body));
+    }
+  }
+
+  // Identifier-shortening pass: rename multi-token identifiers (2+ tokens
+  // in cl100k_base) to shorter 1-token names. This is lossy (round-tripped
+  // Go won't have the original names) but preserves semantics. Saves
+  // ~1 token per usage for identifiers like `is_prime`, `reverseString`,
+  // `binarySearch`, `primes`, `runes`, etc.
+  //
+  // Build a name mapping from old → new so pre-computed results can be
+  // re-keyed after shortening.
+  const renameMapping = shortenIdentifiers(program);
+  // Re-key precomputed maps using the rename mapping.
+  if (renameMapping.size > 0) {
+    for (const [oldName, newName] of renameMapping) {
+      if (precomputedElidable.has(oldName)) {
+        precomputedElidable.set(newName, precomputedElidable.get(oldName)!);
+      }
+      if (precomputedReturnElide.has(oldName)) {
+        precomputedReturnElide.set(newName, precomputedReturnElide.get(oldName)!);
+      }
+      if (precomputedBody.has(oldName)) {
+        precomputedBody.set(newName, precomputedBody.get(oldName)!);
+      }
+    }
+  }
+
+  const parts: string[] = [];
   for (const decl of program.decls) {
     parts.push(nodeToAET(decl));
   }
+  globalFuncSigs = new Map();
+  globalCallSiteArgTypes = new Map();
   return parts.join(";");
+}
+
+/**
+ * Rename identifiers whose cl100k_base token count is 2+ to a unique
+ * single-token name, across the entire program. Skips "main", Go keywords,
+ * builtins, and stdlib aliases.
+ */
+function shortenIdentifiers(program: IR.IRProgram): Map<string, string> {
+  // Heuristic for detecting multi-token identifiers in cl100k_base.
+  // Uses a combination of pattern rules and a precomputed list of known
+  // multi-token words common in Go code. This avoids a tiktoken dependency
+  // in the reverse module.
+  const knownMultiToken = new Set([
+    // Common Go identifier patterns that tokenize as 2+ tokens:
+    "runes", "primes", "sieve", "hanoi", "syms", "decls", "stmts",
+    "elts", "vals", "recv", "exprs", "funcs", "decrypted",
+  ]);
+  const tokenize = (s: string): number => {
+    if (knownMultiToken.has(s)) return 2;
+    if (s.includes("_")) return 2;     // snake_case
+    if (s.length > 7) return 2;        // long names (lowered from 8)
+    if (/^[a-z]+[A-Z]/.test(s)) return 2; // camelCase
+    return 1;
+  };
+
+  // Collect all identifiers and their usage counts.
+  const identCounts = new Map<string, number>();
+  function countIdent(name: string): void {
+    identCounts.set(name, (identCounts.get(name) || 0) + 1);
+  }
+
+  // Reserved names: Go keywords, builtins, stdlib aliases, "main".
+  const reserved = new Set([
+    "main", "init", "_",
+    "if", "else", "for", "range", "switch", "case", "default", "select",
+    "go", "defer", "return", "break", "continue", "fallthrough",
+    "func", "type", "struct", "interface", "map", "chan",
+    "const", "var", "true", "false", "nil",
+    "make", "append", "len", "cap", "delete", "copy", "new", "close",
+    "panic", "recover", "print", "println",
+    "mk", "apl", "ln", "cp", "cpy", "dx", "nw", "rng", "flt", "mp",
+    "fn", "ty", "ft",
+    "int", "string", "bool", "byte", "rune", "error",
+    "float32", "float64", "int8", "int16", "int32", "int64",
+    "uint", "uint8", "uint16", "uint32", "uint64",
+  ]);
+  // Add all stdlib alias VALUES to reserved set (the short names like pl, pf).
+  for (const val of Object.values(reverseAliasMap)) {
+    reserved.add(val);
+  }
+
+  // Walk the IR and count all user identifiers.
+  function walkExpr(e: IR.IRExpr): void {
+    if (!e) return;
+    switch (e.kind) {
+      case "Ident": countIdent((e as IR.IRIdent).name); return;
+      case "CallExpr": {
+        const c = e as IR.IRCallExpr;
+        walkExpr(c.func);
+        for (const a of c.args) walkExpr(a);
+        return;
+      }
+      case "BinaryExpr": walkExpr((e as IR.IRBinaryExpr).left); walkExpr((e as IR.IRBinaryExpr).right); return;
+      case "UnaryExpr": walkExpr((e as IR.IRUnaryExpr).x); return;
+      case "IndexExpr": walkExpr((e as IR.IRIndexExpr).x); walkExpr((e as IR.IRIndexExpr).index); return;
+      case "SelectorExpr": walkExpr((e as IR.IRSelectorExpr).x); return;
+      case "ParenExpr": walkExpr((e as IR.IRParenExpr).x); return;
+      case "SliceExpr": {
+        const s = e as IR.IRSliceExpr;
+        walkExpr(s.x); if (s.low) walkExpr(s.low); if (s.high) walkExpr(s.high); return;
+      }
+      case "CompositeLit": for (const el of (e as IR.IRCompositeLit).elts) walkExpr(el); return;
+      case "KeyValueExpr": walkExpr((e as IR.IRKeyValueExpr).key); walkExpr((e as IR.IRKeyValueExpr).value); return;
+    }
+  }
+  function walkNode(n: IR.IRNode | IR.IRExprStmt): void {
+    if (!n) return;
+    switch (n.kind) {
+      case "FuncDecl": {
+        const fn = n as IR.IRFuncDecl;
+        countIdent(fn.name);
+        for (const p of fn.params) countIdent(p.name);
+        walkBlock(fn.body); return;
+      }
+      case "BlockStmt": walkBlock(n as IR.IRBlockStmt); return;
+      case "ExprStmt": walkExpr((n as IR.IRExprStmt).expr); return;
+      case "ReturnStmt": for (const v of (n as IR.IRReturnStmt).values) walkExpr(v); return;
+      case "AssignStmt": {
+        const a = n as IR.IRAssignStmt;
+        for (const l of a.lhs) walkExpr(l); for (const r of a.rhs) walkExpr(r); return;
+      }
+      case "ShortDeclStmt": {
+        const s = n as IR.IRShortDeclStmt;
+        for (const nm of s.names) countIdent(nm);
+        for (const v of s.values) walkExpr(v); return;
+      }
+      case "IncDecStmt": walkExpr((n as IR.IRIncDecStmt).x); return;
+      case "IfStmt": {
+        const i = n as IR.IRIfStmt;
+        if (i.init) walkNode(i.init); walkExpr(i.cond);
+        walkBlock(i.body); if (i.else_) walkNode(i.else_); return;
+      }
+      case "ForStmt": {
+        const f = n as IR.IRForStmt;
+        if (f.init) walkNode(f.init); if (f.cond) walkExpr(f.cond);
+        if (f.post) walkNode(f.post); walkBlock(f.body); return;
+      }
+      case "RangeStmt": {
+        const r = n as IR.IRRangeStmt;
+        if (r.key) countIdent(r.key); if (r.value) countIdent(r.value);
+        walkExpr(r.x); walkBlock(r.body); return;
+      }
+      case "SwitchStmt": {
+        const sw = n as IR.IRSwitchStmt;
+        if (sw.tag) walkExpr(sw.tag);
+        for (const c of sw.cases) {
+          if (c.values) for (const v of c.values) walkExpr(v);
+          for (const s of c.body) walkNode(s);
+        }
+        return;
+      }
+      case "VarDecl": {
+        const v = n as IR.IRVarDecl;
+        countIdent(v.name); if (v.value) walkExpr(v.value); return;
+      }
+    }
+  }
+  function walkBlock(b: IR.IRBlockStmt): void {
+    for (const s of b.stmts) walkNode(s);
+  }
+  for (const d of program.decls) walkNode(d);
+
+  // Build rename map: for each multi-token identifier, assign a short name.
+  // Sort by usage count × (tokenCost - 1) to maximize savings.
+  const candidates: Array<{ name: string; uses: number; cost: number }> = [];
+  for (const [name, uses] of identCounts) {
+    if (reserved.has(name)) continue;
+    const cost = tokenize(name);
+    if (cost >= 2) candidates.push({ name, uses, cost });
+  }
+  candidates.sort((a, b) => (b.uses * (b.cost - 1)) - (a.uses * (a.cost - 1)));
+
+  // Generate short names: single letters a-z (excluding reserved), then
+  // two-letter combos aa, ab, ...
+  const existingSingleToken = new Set<string>();
+  for (const [name] of identCounts) {
+    if (tokenize(name) === 1) existingSingleToken.add(name);
+  }
+
+  function* nameGen(): Generator<string> {
+    for (const c of "abcdefghijklmnopqrstuvwxyz") {
+      if (!reserved.has(c) && !existingSingleToken.has(c)) yield c;
+    }
+    for (const c1 of "abcdefghijklmnopqrstuvwxyz") {
+      for (const c2 of "abcdefghijklmnopqrstuvwxyz") {
+        const n = c1 + c2;
+        if (!reserved.has(n) && !existingSingleToken.has(n)) yield n;
+      }
+    }
+  }
+
+  const gen = nameGen();
+  const renameMap = new Map<string, string>();
+  for (const c of candidates) {
+    const next = gen.next();
+    if (next.done) break;
+    renameMap.set(c.name, next.value);
+    existingSingleToken.add(next.value);
+  }
+  if (renameMap.size === 0) return renameMap;
+
+  // Apply renaming across the entire IR.
+  function renameExpr(e: IR.IRExpr): void {
+    if (!e) return;
+    switch (e.kind) {
+      case "Ident": {
+        const id = e as IR.IRIdent;
+        const r = renameMap.get(id.name);
+        if (r) id.name = r;
+        return;
+      }
+      case "CallExpr": {
+        const c = e as IR.IRCallExpr;
+        renameExpr(c.func);
+        for (const a of c.args) renameExpr(a);
+        return;
+      }
+      case "BinaryExpr": renameExpr((e as IR.IRBinaryExpr).left); renameExpr((e as IR.IRBinaryExpr).right); return;
+      case "UnaryExpr": renameExpr((e as IR.IRUnaryExpr).x); return;
+      case "IndexExpr": renameExpr((e as IR.IRIndexExpr).x); renameExpr((e as IR.IRIndexExpr).index); return;
+      case "SelectorExpr": renameExpr((e as IR.IRSelectorExpr).x); return;
+      case "ParenExpr": renameExpr((e as IR.IRParenExpr).x); return;
+      case "SliceExpr": {
+        const s = e as IR.IRSliceExpr;
+        renameExpr(s.x); if (s.low) renameExpr(s.low); if (s.high) renameExpr(s.high); return;
+      }
+      case "CompositeLit": for (const el of (e as IR.IRCompositeLit).elts) renameExpr(el); return;
+      case "KeyValueExpr": renameExpr((e as IR.IRKeyValueExpr).key); renameExpr((e as IR.IRKeyValueExpr).value); return;
+    }
+  }
+  function renameNode(n: IR.IRNode | IR.IRExprStmt): void {
+    if (!n) return;
+    switch (n.kind) {
+      case "FuncDecl": {
+        const fn = n as IR.IRFuncDecl;
+        const r = renameMap.get(fn.name);
+        if (r) fn.name = r;
+        for (const p of fn.params) {
+          const rp = renameMap.get(p.name);
+          if (rp) p.name = rp;
+        }
+        renameBlock(fn.body); return;
+      }
+      case "BlockStmt": renameBlock(n as IR.IRBlockStmt); return;
+      case "ExprStmt": renameExpr((n as IR.IRExprStmt).expr); return;
+      case "ReturnStmt": for (const v of (n as IR.IRReturnStmt).values) renameExpr(v); return;
+      case "AssignStmt": {
+        const a = n as IR.IRAssignStmt;
+        for (const l of a.lhs) renameExpr(l); for (const r of a.rhs) renameExpr(r); return;
+      }
+      case "ShortDeclStmt": {
+        const s = n as IR.IRShortDeclStmt;
+        s.names = s.names.map(nm => renameMap.get(nm) || nm);
+        for (const v of s.values) renameExpr(v); return;
+      }
+      case "IncDecStmt": renameExpr((n as IR.IRIncDecStmt).x); return;
+      case "IfStmt": {
+        const i = n as IR.IRIfStmt;
+        if (i.init) renameNode(i.init); renameExpr(i.cond);
+        renameBlock(i.body); if (i.else_) renameNode(i.else_); return;
+      }
+      case "ForStmt": {
+        const f = n as IR.IRForStmt;
+        if (f.init) renameNode(f.init); if (f.cond) renameExpr(f.cond);
+        if (f.post) renameNode(f.post); renameBlock(f.body); return;
+      }
+      case "RangeStmt": {
+        const r = n as IR.IRRangeStmt;
+        if (r.key) { const rk = renameMap.get(r.key); if (rk) r.key = rk; }
+        if (r.value) { const rv = renameMap.get(r.value); if (rv) r.value = rv; }
+        renameExpr(r.x); renameBlock(r.body); return;
+      }
+      case "SwitchStmt": {
+        const sw = n as IR.IRSwitchStmt;
+        if (sw.tag) renameExpr(sw.tag);
+        for (const c of sw.cases) {
+          if (c.values) for (const v of c.values) renameExpr(v);
+          for (const s of c.body) renameNode(s);
+        }
+        return;
+      }
+      case "VarDecl": {
+        const v = n as IR.IRVarDecl;
+        const rv = renameMap.get(v.name);
+        if (rv) v.name = rv;
+        if (v.value) renameExpr(v.value); return;
+      }
+    }
+  }
+  function renameBlock(b: IR.IRBlockStmt): void {
+    for (const s of b.stmts) renameNode(s);
+  }
+  for (const d of program.decls) renameNode(d);
+  return renameMap;
+}
+
+/**
+ * Walk the whole program and, for each call to a known function, compute
+ * the types of the arguments as they appear in the caller. Aggregates
+ * types across all call sites: if every call site agrees on a type at
+ * position i, that type becomes the "hint". Disagreements or default-int
+ * arguments yield undefined (no hint).
+ */
+function computeCallSiteArgTypes(decls: IR.IRNode[]): Map<string, (IR.IRType | undefined)[]> {
+  const result = new Map<string, (IR.IRType | undefined)[]>();
+  // Collect raw per-site args first so we can reconcile.
+  const raw = new Map<string, (IR.IRType | undefined)[][]>();
+
+  for (const d of decls) {
+    if (d.kind !== "FuncDecl") continue;
+    const fn = d as IR.IRFuncDecl;
+
+    // Seed local symbol table from the caller's params and body bindings.
+    const symbols = new Map<string, IR.IRType>();
+    for (const p of fn.params) {
+      if (p.type.name !== "interface{}") symbols.set(p.name, p.type);
+    }
+    seedReverseSymbols(fn.body, symbols);
+
+    // Visit every CallExpr and record arg types.
+    visitCallExprsReverse(fn.body, (call) => {
+      if (call.func.kind !== "Ident") return;
+      const name = (call.func as IR.IRIdent).name;
+      if (!globalFuncSigs.has(name)) return;
+      if (name === fn.name) return; // skip self-recursion
+      const argTypes: (IR.IRType | undefined)[] = [];
+      for (const a of call.args) {
+        argTypes.push(inferReverseExprType(a, symbols));
+      }
+      let list = raw.get(name);
+      if (!list) { list = []; raw.set(name, list); }
+      list.push(argTypes);
+    });
+  }
+
+  // Reconcile: for each callee, for each position, pick the type that every
+  // site agrees on (ignoring undefined slots).
+  for (const [name, sites] of raw) {
+    const callee = globalFuncSigs.get(name);
+    if (!callee) continue;
+    const arity = callee.params.length;
+    const hints: (IR.IRType | undefined)[] = new Array(arity).fill(undefined);
+    for (let i = 0; i < arity; i++) {
+      let agreed: IR.IRType | undefined;
+      let conflict = false;
+      for (const argTypes of sites) {
+        if (i >= argTypes.length) continue;
+        const t = argTypes[i];
+        if (!t) continue;
+        if (!agreed) agreed = t;
+        else if (agreed.name !== t.name) { conflict = true; break; }
+      }
+      if (!conflict) hints[i] = agreed;
+    }
+    result.set(name, hints);
+  }
+  return result;
+}
+
+/** Seed a symbol table from ShortDecl/VarDecl/Range bindings. */
+function seedReverseSymbols(block: IR.IRBlockStmt, symbols: Map<string, IR.IRType>): void {
+  function visit(n: IR.IRNode | IR.IRExprStmt): void {
+    if (!n) return;
+    switch (n.kind) {
+      case "BlockStmt":
+        for (const s of (n as IR.IRBlockStmt).stmts) visit(s);
+        return;
+      case "ShortDeclStmt": {
+        const s = n as IR.IRShortDeclStmt;
+        if (s.names.length === 1 && s.values.length === 1) {
+          const t = inferReverseExprType(s.values[0], symbols);
+          if (t) symbols.set(s.names[0], t);
+        } else if (s.names.length === s.values.length) {
+          for (let i = 0; i < s.names.length; i++) {
+            const t = inferReverseExprType(s.values[i], symbols);
+            if (t) symbols.set(s.names[i], t);
+          }
+        }
+        return;
+      }
+      case "VarDecl": {
+        const v = n as IR.IRVarDecl;
+        if (v.type) symbols.set(v.name, v.type);
+        else if (v.value) {
+          const t = inferReverseExprType(v.value, symbols);
+          if (t) symbols.set(v.name, t);
+        }
+        return;
+      }
+      case "RangeStmt": {
+        const r = n as IR.IRRangeStmt;
+        const containerType = inferReverseExprType(r.x, symbols);
+        if (containerType) {
+          if (containerType.name.startsWith("[]") || containerType.isSlice) {
+            const elt = containerType.elementType || IR.simpleType(containerType.name.slice(2));
+            if (r.key && r.key !== "_") symbols.set(r.key, IR.simpleType("int"));
+            if (r.value && r.value !== "_") symbols.set(r.value, elt);
+          } else if (containerType.isMap && containerType.keyType && containerType.valueType) {
+            if (r.key && r.key !== "_") symbols.set(r.key, containerType.keyType);
+            if (r.value && r.value !== "_") symbols.set(r.value, containerType.valueType);
+          } else if (containerType.name === "string") {
+            if (r.key && r.key !== "_") symbols.set(r.key, IR.simpleType("int"));
+            if (r.value && r.value !== "_") symbols.set(r.value, IR.simpleType("rune"));
+          }
+        }
+        visit(r.body);
+        return;
+      }
+      case "IfStmt": {
+        const i = n as IR.IRIfStmt;
+        if (i.init) visit(i.init);
+        visit(i.body);
+        if (i.else_) visit(i.else_);
+        return;
+      }
+      case "ForStmt": {
+        const f = n as IR.IRForStmt;
+        if (f.init) visit(f.init);
+        visit(f.body);
+        return;
+      }
+      case "SwitchStmt": {
+        const sw = n as IR.IRSwitchStmt;
+        for (const c of sw.cases) for (const s of c.body) visit(s);
+        return;
+      }
+    }
+  }
+  visit(block);
+}
+
+/** Minimal type inference over an IR expression, using a symbol table. */
+function inferReverseExprType(e: IR.IRExpr, symbols: Map<string, IR.IRType>): IR.IRType | undefined {
+  if (!e) return undefined;
+  switch (e.kind) {
+    case "BasicLit": {
+      const lit = e as IR.IRBasicLit;
+      if (lit.type === "INT") return IR.simpleType("int");
+      if (lit.type === "FLOAT") return IR.simpleType("float64");
+      if (lit.type === "STRING") return IR.simpleType("string");
+      if (lit.type === "RUNE") return IR.simpleType("rune");
+      return undefined;
+    }
+    case "Ident": {
+      const n = (e as IR.IRIdent).name;
+      if (n === "true" || n === "false") return IR.simpleType("bool");
+      if (n === "nil") return undefined;
+      return symbols.get(n);
+    }
+    case "CompositeLit": {
+      const cl = e as IR.IRCompositeLit;
+      if (!cl.type) return undefined;
+      if (cl.type.kind === "ArrayTypeExpr") {
+        const at = cl.type as IR.IRArrayTypeExpr;
+        const eltName = (at.elt as any).name;
+        if (eltName) {
+          return { name: "[]" + eltName, isSlice: true, elementType: IR.simpleType(eltName) };
+        }
+      }
+      if (cl.type.kind === "MapTypeExpr") {
+        const mt = cl.type as IR.IRMapTypeExpr;
+        const k = (mt.key as any).name || "string";
+        const v = (mt.value as any).name || "int";
+        return { name: `map[${k}]${v}`, isMap: true, keyType: IR.simpleType(k), valueType: IR.simpleType(v) };
+      }
+      if (cl.type.kind === "Ident") return IR.simpleType((cl.type as IR.IRIdent).name);
+      return undefined;
+    }
+    case "CallExpr": {
+      const c = e as IR.IRCallExpr;
+      if (c.func.kind === "Ident") {
+        const name = (c.func as IR.IRIdent).name;
+        // Type conversions
+        if (name === "string") return IR.simpleType("string");
+        if (name === "int" || name === "int32" || name === "int64") return IR.simpleType(name);
+        if (name === "byte" || name === "rune") return IR.simpleType(name);
+        if (name === "float32" || name === "float64") return IR.simpleType(name);
+        if (name === "bool") return IR.simpleType("bool");
+        if (name === "len" || name === "cap") return IR.simpleType("int");
+        // User-defined function: look up signature
+        const callee = globalFuncSigs.get(name);
+        if (callee && callee.results.length === 1) return callee.results[0];
+      }
+      if (c.func.kind === "ArrayTypeExpr") {
+        const at = c.func as IR.IRArrayTypeExpr;
+        const eltName = (at.elt as any).name || "byte";
+        return { name: "[]" + eltName, isSlice: true, elementType: IR.simpleType(eltName) };
+      }
+      return undefined;
+    }
+    case "BinaryExpr": {
+      const b = e as IR.IRBinaryExpr;
+      if (["==", "!=", "<", ">", "<=", ">=", "&&", "||"].includes(b.op)) {
+        return IR.simpleType("bool");
+      }
+      return inferReverseExprType(b.left, symbols) ?? inferReverseExprType(b.right, symbols);
+    }
+    case "UnaryExpr": {
+      const u = e as IR.IRUnaryExpr;
+      if (u.op === "!") return IR.simpleType("bool");
+      return inferReverseExprType(u.x, symbols);
+    }
+    case "ParenExpr":
+      return inferReverseExprType((e as IR.IRParenExpr).x, symbols);
+    case "IndexExpr": {
+      const ix = e as IR.IRIndexExpr;
+      const ct = inferReverseExprType(ix.x, symbols);
+      if (ct) {
+        if (ct.elementType) return ct.elementType;
+        if (ct.name.startsWith("[]")) return IR.simpleType(ct.name.slice(2));
+        if (ct.name === "string") return IR.simpleType("byte");
+      }
+      return undefined;
+    }
+  }
+  return undefined;
+}
+
+/** Visit every CallExpr in a body, calling `visitor` on each. */
+function visitCallExprsReverse(body: IR.IRBlockStmt, visitor: (c: IR.IRCallExpr) => void): void {
+  function visitExpr(e: IR.IRExpr): void {
+    if (!e) return;
+    if (e.kind === "CallExpr") {
+      visitor(e as IR.IRCallExpr);
+      const c = e as IR.IRCallExpr;
+      for (const a of c.args) visitExpr(a);
+      visitExpr(c.func);
+      return;
+    }
+    if (e.kind === "BinaryExpr") {
+      const b = e as IR.IRBinaryExpr;
+      visitExpr(b.left); visitExpr(b.right); return;
+    }
+    if (e.kind === "UnaryExpr") { visitExpr((e as IR.IRUnaryExpr).x); return; }
+    if (e.kind === "ParenExpr") { visitExpr((e as IR.IRParenExpr).x); return; }
+    if (e.kind === "IndexExpr") {
+      const ix = e as IR.IRIndexExpr;
+      visitExpr(ix.x); visitExpr(ix.index); return;
+    }
+    if (e.kind === "SelectorExpr") { visitExpr((e as IR.IRSelectorExpr).x); return; }
+    if (e.kind === "CompositeLit") {
+      for (const el of (e as IR.IRCompositeLit).elts) visitExpr(el);
+      return;
+    }
+  }
+  function visit(n: IR.IRNode | IR.IRExprStmt): void {
+    if (!n) return;
+    switch (n.kind) {
+      case "BlockStmt":
+        for (const s of (n as IR.IRBlockStmt).stmts) visit(s); return;
+      case "ExprStmt": visitExpr((n as IR.IRExprStmt).expr); return;
+      case "AssignStmt": {
+        const a = n as IR.IRAssignStmt;
+        for (const l of a.lhs) visitExpr(l);
+        for (const r of a.rhs) visitExpr(r);
+        return;
+      }
+      case "ShortDeclStmt":
+        for (const v of (n as IR.IRShortDeclStmt).values) visitExpr(v);
+        return;
+      case "IncDecStmt": visitExpr((n as IR.IRIncDecStmt).x); return;
+      case "ReturnStmt":
+        for (const v of (n as IR.IRReturnStmt).values) visitExpr(v);
+        return;
+      case "IfStmt": {
+        const i = n as IR.IRIfStmt;
+        if (i.init) visit(i.init);
+        visitExpr(i.cond);
+        visit(i.body);
+        if (i.else_) visit(i.else_);
+        return;
+      }
+      case "ForStmt": {
+        const f = n as IR.IRForStmt;
+        if (f.init) visit(f.init);
+        if (f.cond) visitExpr(f.cond);
+        if (f.post) visit(f.post);
+        visit(f.body);
+        return;
+      }
+      case "RangeStmt": visit((n as IR.IRRangeStmt).body); return;
+      case "SwitchStmt": {
+        const sw = n as IR.IRSwitchStmt;
+        if (sw.tag) visitExpr(sw.tag);
+        for (const c of sw.cases) {
+          if (c.values) for (const v of c.values) visitExpr(v);
+          for (const s of c.body) visit(s);
+        }
+        return;
+      }
+      case "VarDecl": {
+        const v = n as IR.IRVarDecl;
+        if (v.value) visitExpr(v.value);
+        return;
+      }
+    }
+  }
+  visit(body);
 }
 
 function shortenType(name: string): string {
@@ -484,6 +1123,299 @@ function canElideParamTypes(params: IR.IRParam[], body: IR.IRBlockStmt): boolean
     if (!hasDisambiguatingUsage(p.name, p.type, body)) return false;
   }
   return true;
+}
+
+/**
+ * Per-parameter elision analysis. Returns a boolean array the same length as
+ * `params`, where `true` at index i means param i's type annotation can be
+ * omitted and the forward transformer will still recover the correct type.
+ *
+ * The analysis is a two-step flood:
+ *   1. Seed with direct evidence: `int` (default), disambiguating usage, or
+ *      non-inferable type.
+ *   2. Positional propagation: for any recursive call `fn(a,b,c)` inside the
+ *      body, if argument k is a plain Ident that matches another parameter
+ *      `arg` and `arg` is already marked elidable AND `params[k].type`
+ *      equals `params[indexOf(arg)].type`, then param k is also elidable.
+ *      Iterated until fixed point — this lets hanoi's `via` borrow the
+ *      string evidence from its sibling `to`/`from`.
+ */
+function computeElidableParams(
+  funcName: string,
+  params: IR.IRParam[],
+  body: IR.IRBlockStmt,
+): boolean[] {
+  const n = params.length;
+  const elidable: boolean[] = new Array(n).fill(false);
+  const paramIdx: Record<string, number> = {};
+  params.forEach((p, i) => { paramIdx[p.name] = i; });
+
+  // Pass 1: direct evidence.
+  for (let i = 0; i < n; i++) {
+    const p = params[i];
+    if (p.type.name === "interface{}") { elidable[i] = true; continue; }
+    if (!isInferableType(p.type)) continue;
+    if (p.name === "_" || p.name.startsWith("_")) continue;
+    if (p.type.name === "int") { elidable[i] = true; continue; }
+    if (hasDisambiguatingUsage(p.name, p.type, body)) { elidable[i] = true; }
+  }
+
+  // Pass 1b: call-site driven evidence. If the forward's cross-function
+  // propagation has a typed argument at our position-i from any caller,
+  // we can drop the annotation — the forward will recover it from the
+  // call site. This is how `isPalindrome(s)` drops `s:string` when main
+  // calls it with a ranged-string element, or how `printMatrix(m)` drops
+  // `m:[][]int` when main calls it with a literal `[][]int{...}`.
+  const siteHints = globalCallSiteArgTypes.get(funcName);
+  if (siteHints) {
+    for (let i = 0; i < n; i++) {
+      if (elidable[i]) continue;
+      const p = params[i];
+      if (!isInferableType(p.type)) continue;
+      const hint = siteHints[i];
+      if (!hint) continue;
+      if (hint.name === p.type.name) {
+        elidable[i] = true;
+      }
+    }
+  }
+
+  // Pass 2: cross-function propagation. For each call from this function
+  // to another KNOWN function (via globalFuncSigs), if our param P is
+  // passed at arg-position k and the callee's param k has the same non-int
+  // type, then P can be elided — the forward's cross-function propagation
+  // pass will carry the type across by looking up the callee's signature.
+  for (const call of collectAllCallArgs(body)) {
+    if (call.funcName === funcName) continue; // skip self-recursion here
+    const callee = globalFuncSigs.get(call.funcName);
+    if (!callee) continue;
+    const m = Math.min(call.args.length, callee.params.length);
+    for (let k = 0; k < m; k++) {
+      const arg = call.args[k];
+      if (arg.kind !== "Ident") continue;
+      const argName = (arg as IR.IRIdent).name;
+      const i = paramIdx[argName];
+      if (i === undefined) continue;
+      if (elidable[i]) continue;
+      const calleeType = callee.params[k].type;
+      if (calleeType.name === "int" || calleeType.name === "interface{}") continue;
+      if (params[i].type.name !== calleeType.name) continue;
+      elidable[i] = true;
+    }
+  }
+
+  // Pass 3: recursive-call positional propagation, iterated to fixed point.
+  if (!funcName) return elidable;
+  const calls = collectSelfCallArgs(funcName, body);
+  if (calls.length === 0) return elidable;
+
+  for (let iter = 0; iter < 4; iter++) {
+    let changed = false;
+    for (const args of calls) {
+      const len = Math.min(args.length, n);
+      for (let i = 0; i < len; i++) {
+        if (elidable[i]) continue;
+        if (!isInferableType(params[i].type)) continue;
+        const arg = args[i];
+        if (arg.kind !== "Ident") continue;
+        const argName = (arg as IR.IRIdent).name;
+        const j = paramIdx[argName];
+        if (j === undefined) continue;
+        // Argument is a plain param reference. If that sibling is already
+        // known-elidable (via direct evidence) AND shares the same type,
+        // this param can be elided too — the forward's recursive-call
+        // positional propagation will carry the type across.
+        if (elidable[j] && params[j].type.name === params[i].type.name) {
+          elidable[i] = true;
+          changed = true;
+        }
+      }
+    }
+    if (!changed) break;
+  }
+
+  return elidable;
+}
+
+/**
+ * Collect every CallExpr with its callee name and args, walking the entire
+ * body. Used for cross-function type propagation analysis.
+ */
+function collectAllCallArgs(body: IR.IRBlockStmt): Array<{ funcName: string; args: IR.IRExpr[] }> {
+  const out: Array<{ funcName: string; args: IR.IRExpr[] }> = [];
+
+  function visitExpr(e: IR.IRExpr): void {
+    if (!e) return;
+    if (e.kind === "CallExpr") {
+      const c = e as IR.IRCallExpr;
+      if (c.func.kind === "Ident") {
+        out.push({ funcName: (c.func as IR.IRIdent).name, args: c.args });
+      }
+      for (const a of c.args) visitExpr(a);
+      visitExpr(c.func);
+      return;
+    }
+    if (e.kind === "BinaryExpr") {
+      const b = e as IR.IRBinaryExpr;
+      visitExpr(b.left); visitExpr(b.right); return;
+    }
+    if (e.kind === "UnaryExpr") { visitExpr((e as IR.IRUnaryExpr).x); return; }
+    if (e.kind === "ParenExpr") { visitExpr((e as IR.IRParenExpr).x); return; }
+    if (e.kind === "IndexExpr") {
+      const ix = e as IR.IRIndexExpr;
+      visitExpr(ix.x); visitExpr(ix.index); return;
+    }
+    if (e.kind === "SelectorExpr") { visitExpr((e as IR.IRSelectorExpr).x); return; }
+  }
+
+  function visit(n: IR.IRNode | IR.IRExprStmt): void {
+    if (!n) return;
+    switch (n.kind) {
+      case "BlockStmt":
+        for (const s of (n as IR.IRBlockStmt).stmts) visit(s); return;
+      case "ExprStmt": visitExpr((n as IR.IRExprStmt).expr); return;
+      case "AssignStmt": {
+        const a = n as IR.IRAssignStmt;
+        for (const l of a.lhs) visitExpr(l);
+        for (const r of a.rhs) visitExpr(r);
+        return;
+      }
+      case "ShortDeclStmt":
+        for (const v of (n as IR.IRShortDeclStmt).values) visitExpr(v);
+        return;
+      case "IncDecStmt": visitExpr((n as IR.IRIncDecStmt).x); return;
+      case "ReturnStmt":
+        for (const v of (n as IR.IRReturnStmt).values) visitExpr(v);
+        return;
+      case "IfStmt": {
+        const i = n as IR.IRIfStmt;
+        if (i.init) visit(i.init);
+        visitExpr(i.cond);
+        visit(i.body);
+        if (i.else_) visit(i.else_);
+        return;
+      }
+      case "ForStmt": {
+        const f = n as IR.IRForStmt;
+        if (f.init) visit(f.init);
+        if (f.cond) visitExpr(f.cond);
+        if (f.post) visit(f.post);
+        visit(f.body);
+        return;
+      }
+      case "RangeStmt": visit((n as IR.IRRangeStmt).body); return;
+      case "SwitchStmt": {
+        const sw = n as IR.IRSwitchStmt;
+        if (sw.tag) visitExpr(sw.tag);
+        for (const c of sw.cases) {
+          if (c.values) for (const v of c.values) visitExpr(v);
+          for (const s of c.body) visit(s);
+        }
+        return;
+      }
+      case "VarDecl": {
+        const v = n as IR.IRVarDecl;
+        if (v.value) visitExpr(v.value);
+        return;
+      }
+    }
+  }
+
+  visit(body);
+  return out;
+}
+
+/**
+ * Collect the argument list of every self-recursive call in a function body.
+ * Used by computeElidableParams to drive positional type propagation.
+ */
+function collectSelfCallArgs(funcName: string, body: IR.IRBlockStmt): IR.IRExpr[][] {
+  const out: IR.IRExpr[][] = [];
+
+  function visitExpr(e: IR.IRExpr): void {
+    if (!e) return;
+    if (e.kind === "CallExpr") {
+      const c = e as IR.IRCallExpr;
+      if (c.func.kind === "Ident" && (c.func as IR.IRIdent).name === funcName) {
+        out.push(c.args);
+      }
+      visitExpr(c.func);
+      for (const a of c.args) visitExpr(a);
+      return;
+    }
+    if (e.kind === "BinaryExpr") {
+      const b = e as IR.IRBinaryExpr;
+      visitExpr(b.left); visitExpr(b.right); return;
+    }
+    if (e.kind === "UnaryExpr") { visitExpr((e as IR.IRUnaryExpr).x); return; }
+    if (e.kind === "ParenExpr") { visitExpr((e as IR.IRParenExpr).x); return; }
+    if (e.kind === "IndexExpr") {
+      const ix = e as IR.IRIndexExpr;
+      visitExpr(ix.x); visitExpr(ix.index); return;
+    }
+    if (e.kind === "SelectorExpr") { visitExpr((e as IR.IRSelectorExpr).x); return; }
+    if (e.kind === "CompositeLit") {
+      for (const el of (e as IR.IRCompositeLit).elts) visitExpr(el);
+      return;
+    }
+  }
+
+  function visit(n: IR.IRNode | IR.IRExprStmt): void {
+    if (!n) return;
+    switch (n.kind) {
+      case "BlockStmt":
+        for (const s of (n as IR.IRBlockStmt).stmts) visit(s);
+        return;
+      case "ExprStmt": visitExpr((n as IR.IRExprStmt).expr); return;
+      case "AssignStmt": {
+        const a = n as IR.IRAssignStmt;
+        for (const l of a.lhs) visitExpr(l);
+        for (const r of a.rhs) visitExpr(r);
+        return;
+      }
+      case "ShortDeclStmt":
+        for (const v of (n as IR.IRShortDeclStmt).values) visitExpr(v);
+        return;
+      case "IncDecStmt": visitExpr((n as IR.IRIncDecStmt).x); return;
+      case "ReturnStmt":
+        for (const v of (n as IR.IRReturnStmt).values) visitExpr(v);
+        return;
+      case "IfStmt": {
+        const i = n as IR.IRIfStmt;
+        if (i.init) visit(i.init);
+        visitExpr(i.cond);
+        visit(i.body);
+        if (i.else_) visit(i.else_);
+        return;
+      }
+      case "ForStmt": {
+        const f = n as IR.IRForStmt;
+        if (f.init) visit(f.init);
+        if (f.cond) visitExpr(f.cond);
+        if (f.post) visit(f.post);
+        visit(f.body);
+        return;
+      }
+      case "RangeStmt": visit((n as IR.IRRangeStmt).body); return;
+      case "SwitchStmt": {
+        const sw = n as IR.IRSwitchStmt;
+        if (sw.tag) visitExpr(sw.tag);
+        for (const c of sw.cases) {
+          if (c.values) for (const v of c.values) visitExpr(v);
+          for (const s of c.body) visit(s);
+        }
+        return;
+      }
+      case "VarDecl": {
+        const v = n as IR.IRVarDecl;
+        if (v.value) visitExpr(v.value);
+        return;
+      }
+    }
+  }
+
+  visit(body);
+  return out;
 }
 
 /**
@@ -588,25 +1520,38 @@ function hasDisambiguatingUsage(name: string, type: IR.IRType, block: IR.IRBlock
             c.args.length >= 1 && isTarget(c.args[0])) {
           found = true; return;
         }
-        // Printf("... %s ...", p) → string
-        if (type.name === "string" && c.func.kind === "SelectorExpr") {
-          const sel = c.func as IR.IRSelectorExpr;
-          if (sel.x.kind === "Ident" && (sel.x as IR.IRIdent).name === "fmt" &&
-              (sel.sel === "Printf" || sel.sel === "Sprintf" || sel.sel === "Fprintf")) {
-            if (c.args.length > 0 && c.args[0].kind === "BasicLit") {
-              const fmtStr = ((c.args[0] as IR.IRBasicLit).value || "").slice(1, -1);
-              const verbRe = /%[-+# 0]*[\d*]*(?:\.[\d*]+)?([sq])/g;
-              const verbs: number[] = [];
-              let m: RegExpExecArray | null;
-              const allVerbRe = /%[-+# 0]*[\d*]*(?:\.[\d*]+)?([vTtbcdoOqxXUeEfFgGsp])/g;
-              let idx = 0;
-              while ((m = allVerbRe.exec(fmtStr)) !== null) {
-                if (m[1] === "s" || m[1] === "q") verbs.push(idx);
-                idx++;
-              }
-              for (const vi of verbs) {
-                if (isTarget(c.args[1 + vi])) { found = true; return; }
-              }
+        // Printf("... %s ...", p) → string. We check both the aliased form
+        // (e.g. `pf(fmt, args...)` where `pf` = `fmt.Printf`) and the raw
+        // `fmt.Printf` selector form — the reverse pipeline resolves aliases
+        // in-place during Go → IR conversion, so the IR usually has just an
+        // Ident("pf"), not a SelectorExpr.
+        if (type.name === "string") {
+          let isPrintfFamily = false;
+          if (c.func.kind === "Ident") {
+            const fn = (c.func as IR.IRIdent).name;
+            if (fn === "pf" || fn === "pl" || fn === "sf" || fn === "Ef" || fn === "fw" || fn === "fp") {
+              isPrintfFamily = true;
+            }
+          } else if (c.func.kind === "SelectorExpr") {
+            const sel = c.func as IR.IRSelectorExpr;
+            if (sel.x.kind === "Ident" && (sel.x as IR.IRIdent).name === "fmt" &&
+                (sel.sel === "Printf" || sel.sel === "Sprintf" || sel.sel === "Fprintf" ||
+                 sel.sel === "Println" || sel.sel === "Errorf")) {
+              isPrintfFamily = true;
+            }
+          }
+          if (isPrintfFamily && c.args.length > 0 && c.args[0].kind === "BasicLit") {
+            const fmtStr = ((c.args[0] as IR.IRBasicLit).value || "").slice(1, -1);
+            const verbs: number[] = [];
+            let m: RegExpExecArray | null;
+            const allVerbRe = /%[-+# 0]*[\d*]*(?:\.[\d*]+)?([vTtbcdoOqxXUeEfFgGsp])/g;
+            let idx = 0;
+            while ((m = allVerbRe.exec(fmtStr)) !== null) {
+              if (m[1] === "s" || m[1] === "q") verbs.push(idx);
+              idx++;
+            }
+            for (const vi of verbs) {
+              if (isTarget(c.args[1 + vi])) { found = true; return; }
             }
           }
         }
@@ -776,9 +1721,49 @@ function canElideReturnType(results: IR.IRType[], body: IR.IRBlockStmt): boolean
   if (results.length !== 1) return false;
   const ret = results[0];
   if (!isInferableType(ret) && ret.name !== "rune" && ret.name !== "byte") return false;
-  // Check the tail: if it's an unresolvable call, keep the annotation.
-  if (tailIsOpaqueCall(body)) return false;
+  // Special case: when the return type is `int`, elision is always safe.
+  // The forward inference defaults to `int` whenever it cannot determine a
+  // return expression's type, so an opaque tail call like `^fact(n-1)` will
+  // still round-trip as `int`. This saves `->int` (2-3 tokens) and, when
+  // combined with bodyWithImplicitReturns, drops the leading `^` (1 token
+  // per return path) for int-returning functions like factorial / ackermann.
+  if (ret.name === "int") return true;
+  // Other types: refuse if the tail is an unresolvable call UNLESS the
+  // callee is a known sibling function whose return type matches ours.
+  // In that case the forward's cross-function propagation will carry the
+  // type across — e.g. caesarDecrypt returns caesarEncrypt(...) and both
+  // return `string`, so dropping `->string` is safe.
+  if (tailIsOpaqueCall(body)) {
+    const tailCall = findTailCallInBody(body);
+    if (tailCall && tailCall.func.kind === "Ident") {
+      const calleeName = (tailCall.func as IR.IRIdent).name;
+      const callee = globalFuncSigs.get(calleeName);
+      if (callee && callee.results.length === 1 &&
+          callee.results[0].name === ret.name) {
+        return true;
+      }
+    }
+    return false;
+  }
   return true;
+}
+
+/** Find the CallExpr that is the last value of a return statement at any
+ * terminal branch of the body. Used for cross-function return-type analysis. */
+function findTailCallInBody(block: IR.IRBlockStmt): IR.IRCallExpr | null {
+  if (block.stmts.length === 0) return null;
+  const last = block.stmts[block.stmts.length - 1];
+  if (last.kind === "ReturnStmt") {
+    const r = last as IR.IRReturnStmt;
+    if (r.values.length === 1 && r.values[0].kind === "CallExpr") {
+      return r.values[0] as IR.IRCallExpr;
+    }
+  }
+  if (last.kind === "ExprStmt") {
+    const e = (last as IR.IRExprStmt).expr;
+    if (e.kind === "CallExpr") return e as IR.IRCallExpr;
+  }
+  return null;
 }
 
 /**
@@ -950,27 +1935,25 @@ function nodeToAET(node: IR.IRNode | IR.IRExprStmt): string {
       if (node.receiver) {
         s += `${shortenType(node.receiver.type.name)}.`;
       }
-      // Determine whether we can drop parameter type annotations. The forward
-      // transformer's inference handles the common patterns (int, []int,
-      // string, [][]int) so dropping types is usually safe and saves tokens.
-      // Do NOT drop types when:
-      //   - any param is a complex type the inference can't recover
-      //     (pointers, structs, interfaces, maps, chans, func types)
-      //   - param name starts with "_" (unused, can't be inferred from body)
-      //   - multiple params would conflict if all defaulted to int
-      const canDropParamTypes = canElideParamTypes(node.params, node.body);
-      s += `${node.name}(${node.params.map(p => {
+      // Per-parameter elision: for each param, decide independently whether
+      // the forward inference (plus recursive-call positional propagation)
+      // can recover its type. This lets us drop some params in a signature
+      // while keeping annotations on the rest — e.g. hanoi(n,from,to,via)
+      // drops `n:int` (default) and `from:string,to:string` (printf %s
+      // evidence) even when `via` has no direct usage.
+      // Use pre-computed elision results (computed before identifier
+      // shortening) so that cross-function and call-site analysis use
+      // the original, un-renamed function names.
+      const elidable = precomputedElidable.get(node.name) ??
+                        computeElidableParams(node.name, node.params, node.body);
+      s += `${node.name}(${node.params.map((p, i) => {
         if (p.type.name === "interface{}") return p.name;
-        if (canDropParamTypes) return p.name;
+        if (elidable[i]) return p.name;
         return `${p.name}:${shortenType(p.type.name)}`;
       }).join(",")})`;
 
-      // Determine if the return type can be elided. True when the tail
-      // expression of the body is a value expression from which the forward
-      // inference can derive the same return type — i.e. the body has no
-      // bare call-statements (procedural mismatch), the tail is a bare expr,
-      // and there are no `^` returns to early-return a different type.
-      const canDropReturnType = canElideReturnType(node.results, node.body);
+      const canDropReturnType = precomputedReturnElide.get(node.name) ??
+                                 canElideReturnType(node.results, node.body);
       if (node.results.length > 0 && !canDropReturnType) {
         // Check for error return sugar: (T, error) -> ->!T
         const lastResult = node.results[node.results.length - 1];
@@ -990,11 +1973,9 @@ function nodeToAET(node: IR.IRNode | IR.IRExprStmt): string {
         }
       }
 
-      // Apply implicit-return rewriting: if the last stmt is `ReturnStmt(x)`
-      // with a single value expression, rewrite it as a bare ExprStmt so the
-      // forward transformer's tail-implicit-return logic handles it.
-      // Only safe when we're also dropping the return type.
-      const body = canDropReturnType ? bodyWithImplicitReturns(node.body) : node.body;
+      const body = canDropReturnType
+        ? (precomputedBody.get(node.name) ?? bodyWithImplicitReturns(node.body))
+        : node.body;
       s += `{${blockToAET(body)}}`;
       return s;
     }
@@ -1092,10 +2073,12 @@ function blockToAET(block: IR.IRBlockStmt): string {
 }
 
 /**
- * Recognize the canonical `for i := start; i < end; i++` pattern and emit
- * it as the compact `for i := start..end { ... }` AET sugar. The DotDot
- * range sugar is supported by the forward parser; see `isDotDotFor` in
- * parser/index.ts.
+ * Recognize canonical range loops and emit compact sugar:
+ *   `for i := start; i < end;  i++` → `for i := start..end  { ... }`
+ *   `for i := start; i <= end; i++` → `for i := start..=end { ... }`
+ *
+ * The DotDot / DotDotEq range sugar is supported by the forward parser;
+ * see `isDotDotFor` in parser/index.ts.
  *
  * Returns the sugared AET string, or `null` if the for-stmt doesn't match
  * the expected shape (in which case the caller falls back to the generic
@@ -1111,10 +2094,10 @@ function tryEmitDotDotFor(node: IR.IRForStmt): string | null {
   const loopVar = init.names[0];
   const startExpr = init.values[0];
 
-  // cond must be `i < endExpr`
+  // cond must be `i < endExpr` (exclusive) or `i <= endExpr` (inclusive)
   if (node.cond.kind !== "BinaryExpr") return null;
   const cond = node.cond as IR.IRBinaryExpr;
-  if (cond.op !== "<") return null;
+  if (cond.op !== "<" && cond.op !== "<=") return null;
   if (cond.left.kind !== "Ident" || (cond.left as IR.IRIdent).name !== loopVar) return null;
   const endExpr = cond.right;
 
@@ -1123,7 +2106,8 @@ function tryEmitDotDotFor(node: IR.IRForStmt): string | null {
   const post = node.post as IR.IRIncDecStmt;
   if (post.op !== "++" || post.x.kind !== "Ident" || (post.x as IR.IRIdent).name !== loopVar) return null;
 
-  return `for ${loopVar}:=${exprToAET(startExpr)}..${exprToAET(endExpr)}{${blockToAET(node.body)}}`;
+  const op = cond.op === "<=" ? "..=" : "..";
+  return `for ${loopVar}:=${exprToAET(startExpr)}${op}${exprToAET(endExpr)}{${blockToAET(node.body)}}`;
 }
 
 function exprToAET(expr: IR.IRExpr): string {

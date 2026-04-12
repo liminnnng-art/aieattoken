@@ -63,6 +63,13 @@ export function transform(cst: CstNode): IR.IRProgram {
   collectedImports = new Set();
   stmtCounter = 0;
   const decls = transformProgram(cst);
+  // Second pass: cross-function type propagation. After every FuncDecl has
+  // run its own inference, walk the program looking for calls between user
+  // functions and propagate type information across them. Used, e.g., when
+  // `caesarDecrypt(s, shift){caesarEncrypt(s, 26-shift)}` drops types for
+  // `s` — the forward recovers `s:string` by looking up `caesarEncrypt`'s
+  // known signature.
+  propagateCrossFunctionTypes(decls);
   return {
     kind: "Program",
     package: "main",
@@ -70,6 +77,500 @@ export function transform(cst: CstNode): IR.IRProgram {
     decls,
     stmtIndex: 0,
   };
+}
+
+/**
+ * Program-level cross-function type propagation. Iterates until no param
+ * type changes. For each FuncDecl whose parameters are still defaulted to
+ * `int` (the fallback) or have no disambiguating usage, check whether the
+ * body passes that param to another function whose corresponding parameter
+ * has a more specific type. If so, upgrade.
+ *
+ * Also propagates return types: if a function's body has a tail expression
+ * that is a call to another function with a known non-int return type,
+ * replace the inferred `int` return type with the callee's.
+ */
+function propagateCrossFunctionTypes(decls: IR.IRNode[]): void {
+  // Build a signature registry from the current state of all FuncDecls.
+  const sigs = new Map<string, IR.IRFuncDecl>();
+  for (const d of decls) {
+    if (d.kind === "FuncDecl") sigs.set((d as IR.IRFuncDecl).name, d as IR.IRFuncDecl);
+  }
+  if (sigs.size === 0) return;
+
+  // Pre-compute call-site argument types across the whole program so we can
+  // drive param-type upgrades from call sites in ANY function. This handles
+  // patterns like `isPalindrome(w)` called from main() where `w` is known
+  // to be `string` (iterated from `[]string`) — the callee's param[0] can
+  // be upgraded to string even when the callee body has no direct signal.
+  const callSiteHints = collectCallSiteArgTypes(decls, sigs);
+
+  for (let iter = 0; iter < 4; iter++) {
+    let changed = false;
+
+    // Pass A: call-site driven param upgrades. For each known function F,
+    // check the types we computed at F's call sites. If all sites agree on
+    // a non-default type at position i, upgrade F.params[i]. We allow
+    // upgrading from any body-inferred type (e.g. []int from `s[i]`
+    // indexing) to the call-site type (e.g. string from `w` iterating
+    // over []string) — call-site evidence is definitive because it comes
+    // from actual Go code that must type-check.
+    for (const [calleeName, argTypesByCall] of callSiteHints) {
+      const callee = sigs.get(calleeName);
+      if (!callee) continue;
+      if (calleeName === "main") continue;
+      const numParams = callee.params.length;
+      for (let i = 0; i < numParams; i++) {
+        const cur = callee.params[i].type.name;
+        // Collect the argument types seen at each call site, position i.
+        let inferred: IR.IRType | undefined;
+        let conflict = false;
+        for (const argTypes of argTypesByCall) {
+          if (i >= argTypes.length) { conflict = true; break; }
+          const t = argTypes[i];
+          if (!t || t.name === "int" || t.name === "interface{}") continue;
+          if (!inferred) inferred = t;
+          else if (inferred.name !== t.name) { conflict = true; break; }
+        }
+        if (!conflict && inferred && inferred.name !== cur) {
+          callee.params[i].type = inferred;
+          changed = true;
+        }
+      }
+    }
+
+    for (const d of decls) {
+      if (d.kind !== "FuncDecl") continue;
+      const fn = d as IR.IRFuncDecl;
+      if (fn.name === "main") continue;
+
+      // Collect all calls to OTHER known functions in the body.
+      const callSites = collectCallsToKnownFuncs(fn.body, sigs, fn.name);
+
+      // For each call, match positional args against the callee's params.
+      if (fn.params.length > 0) {
+        for (const { calleeName, args } of callSites) {
+          const callee = sigs.get(calleeName);
+          if (!callee) continue;
+          const n = Math.min(args.length, callee.params.length);
+          for (let i = 0; i < n; i++) {
+            const arg = args[i];
+            if (arg.kind !== "Ident") continue;
+            const argName = (arg as IR.IRIdent).name;
+            // Find a param in the current function whose name matches.
+            const targetParam = fn.params.find(p => p.name === argName);
+            if (!targetParam) continue;
+            const calleeType = callee.params[i].type;
+            if (calleeType.name === "int") continue;
+            if (calleeType.name === "interface{}") continue;
+            // Only upgrade when the current param is the default `int` —
+            // don't weaken an already-strong type from direct inference.
+            if (targetParam.type.name !== "int") continue;
+            targetParam.type = calleeType;
+            changed = true;
+          }
+        }
+      }
+
+      // Upgrade return type when the tail expression of the body is a call
+      // to a known function and the current return type is default `int`.
+      if (fn.results.length === 1 && fn.results[0].name === "int") {
+        const tailCall = findTailCallExpr(fn.body);
+        if (tailCall && tailCall.func.kind === "Ident") {
+          const calleeName = (tailCall.func as IR.IRIdent).name;
+          const callee = sigs.get(calleeName);
+          if (callee && callee.results.length === 1 && callee.results[0].name !== "int") {
+            fn.results[0] = callee.results[0];
+            changed = true;
+          }
+        }
+      }
+
+      // Rescue pass: if this function looks procedural (no results) but its
+      // body's tail is a bare call to a known non-void function, upgrade
+      // it. This handles the case where the reverse pipeline elides the
+      // explicit return type (e.g. `caesarDecrypt(s){caesarEncrypt(...)}`):
+      // the forward's single-function isProcedural check saw a bare call
+      // tail and stripped the return type, but cross-function propagation
+      // can now see that the tail calls a known value-returning function.
+      if (fn.results.length === 0) {
+        const tailExprCall = findTailExprCall(fn.body);
+        if (tailExprCall && tailExprCall.func.kind === "Ident") {
+          const calleeName = (tailExprCall.func as IR.IRIdent).name;
+          const callee = sigs.get(calleeName);
+          if (callee && callee.results.length > 0) {
+            // Convert the tail ExprStmt(call) into a ReturnStmt(call) and
+            // adopt the callee's return type.
+            rewriteTailExprToReturn(fn.body);
+            fn.results = callee.results.slice();
+            changed = true;
+          }
+        }
+      }
+    }
+
+    if (!changed) break;
+  }
+}
+
+/**
+ * Walk every FuncDecl body and, for each CallExpr to a known function,
+ * compute the arg types as seen by the caller. Returns a map from callee
+ * name → list of per-call arg type arrays.
+ *
+ * Uses a fresh local SymbolTable per caller function so that we can resolve
+ * identifiers like `w` (from `for _, w := range words`) or local short
+ * declarations (`text := "..."`). This is the critical source of type info
+ * for upgrading callees' param types.
+ */
+function collectCallSiteArgTypes(
+  decls: IR.IRNode[],
+  sigs: Map<string, IR.IRFuncDecl>,
+): Map<string, (IR.IRType | undefined)[][]> {
+  const result = new Map<string, (IR.IRType | undefined)[][]>();
+
+  function push(name: string, argTypes: (IR.IRType | undefined)[]): void {
+    let list = result.get(name);
+    if (!list) { list = []; result.set(name, list); }
+    list.push(argTypes);
+  }
+
+  for (const d of decls) {
+    if (d.kind !== "FuncDecl") continue;
+    const fn = d as IR.IRFuncDecl;
+
+    // Seed a symbol table with this function's own parameter types.
+    const symbols: SymbolTable = new Map();
+    for (const p of fn.params) {
+      if (p.type.name !== "interface{}") symbols.set(p.name, p.type);
+    }
+    // Walk the body gathering local symbol types (via ShortDecl init exprs
+    // and range loops over typed containers).
+    seedSymbolsFromBody(fn.body, symbols);
+
+    // Visit every CallExpr; if the callee is a known function, record the
+    // arg types we can derive from the caller's symbol table.
+    visitCallExprs(fn.body, (call) => {
+      if (call.func.kind !== "Ident") return;
+      const name = (call.func as IR.IRIdent).name;
+      if (!sigs.has(name)) return;
+      if (name === fn.name) return; // skip self-recursion — handled elsewhere
+      const argTypes: (IR.IRType | undefined)[] = [];
+      for (const a of call.args) {
+        argTypes.push(inferExprType(a, symbols));
+      }
+      push(name, argTypes);
+    });
+  }
+  return result;
+}
+
+/**
+ * Seed a SymbolTable from ShortDecl/VarDecl/Range bindings in a block tree.
+ * Used by cross-function call-site analysis so identifiers inside call args
+ * can be resolved to their types.
+ */
+function seedSymbolsFromBody(block: IR.IRBlockStmt, symbols: SymbolTable): void {
+  function visit(n: IR.IRNode | IR.IRExprStmt): void {
+    if (!n) return;
+    switch (n.kind) {
+      case "BlockStmt":
+        for (const s of (n as IR.IRBlockStmt).stmts) visit(s);
+        return;
+      case "ShortDeclStmt": {
+        const s = n as IR.IRShortDeclStmt;
+        if (s.names.length === 1 && s.values.length === 1) {
+          const t = inferExprType(s.values[0], symbols);
+          if (t) symbols.set(s.names[0], t);
+        } else if (s.names.length === s.values.length) {
+          for (let i = 0; i < s.names.length; i++) {
+            const t = inferExprType(s.values[i], symbols);
+            if (t) symbols.set(s.names[i], t);
+          }
+        }
+        return;
+      }
+      case "VarDecl": {
+        const v = n as IR.IRVarDecl;
+        if (v.type) symbols.set(v.name, v.type);
+        else if (v.value) {
+          const t = inferExprType(v.value, symbols);
+          if (t) symbols.set(v.name, t);
+        }
+        return;
+      }
+      case "RangeStmt": {
+        const r = n as IR.IRRangeStmt;
+        // Determine element type from r.x
+        const containerType = inferExprType(r.x, symbols);
+        if (containerType) {
+          // `[]T` → key is int, value is T
+          // `map[K]V` → key is K, value is V
+          // `string` → key is int, value is rune
+          if (containerType.name.startsWith("[]") || containerType.isSlice) {
+            const elt = containerType.elementType || IR.simpleType(containerType.name.slice(2));
+            if (r.key && r.key !== "_") symbols.set(r.key, IR.simpleType("int"));
+            if (r.value && r.value !== "_") symbols.set(r.value, elt);
+          } else if (containerType.isMap && containerType.keyType && containerType.valueType) {
+            if (r.key && r.key !== "_") symbols.set(r.key, containerType.keyType);
+            if (r.value && r.value !== "_") symbols.set(r.value, containerType.valueType);
+          } else if (containerType.name === "string") {
+            if (r.key && r.key !== "_") symbols.set(r.key, IR.simpleType("int"));
+            if (r.value && r.value !== "_") symbols.set(r.value, IR.simpleType("rune"));
+          }
+        }
+        visit(r.body);
+        return;
+      }
+      case "IfStmt": {
+        const i = n as IR.IRIfStmt;
+        if (i.init) visit(i.init);
+        visit(i.body);
+        if (i.else_) visit(i.else_);
+        return;
+      }
+      case "ForStmt": {
+        const f = n as IR.IRForStmt;
+        if (f.init) visit(f.init);
+        visit(f.body);
+        return;
+      }
+      case "SwitchStmt": {
+        const sw = n as IR.IRSwitchStmt;
+        for (const c of sw.cases) for (const s of c.body) visit(s);
+        return;
+      }
+    }
+  }
+  visit(block);
+}
+
+/** Walk a body calling `visitor` on every CallExpr encountered. */
+function visitCallExprs(body: IR.IRBlockStmt, visitor: (call: IR.IRCallExpr) => void): void {
+  function visitExpr(e: IR.IRExpr): void {
+    if (!e) return;
+    if (e.kind === "CallExpr") {
+      const c = e as IR.IRCallExpr;
+      visitor(c);
+      for (const a of c.args) visitExpr(a);
+      visitExpr(c.func);
+      return;
+    }
+    if (e.kind === "BinaryExpr") {
+      const b = e as IR.IRBinaryExpr;
+      visitExpr(b.left); visitExpr(b.right); return;
+    }
+    if (e.kind === "UnaryExpr") { visitExpr((e as IR.IRUnaryExpr).x); return; }
+    if (e.kind === "ParenExpr") { visitExpr((e as IR.IRParenExpr).x); return; }
+    if (e.kind === "IndexExpr") {
+      const ix = e as IR.IRIndexExpr;
+      visitExpr(ix.x); visitExpr(ix.index); return;
+    }
+    if (e.kind === "SelectorExpr") { visitExpr((e as IR.IRSelectorExpr).x); return; }
+  }
+  function visit(n: IR.IRNode | IR.IRExprStmt): void {
+    if (!n) return;
+    switch (n.kind) {
+      case "BlockStmt":
+        for (const s of (n as IR.IRBlockStmt).stmts) visit(s); return;
+      case "ExprStmt": visitExpr((n as IR.IRExprStmt).expr); return;
+      case "AssignStmt": {
+        const a = n as IR.IRAssignStmt;
+        for (const l of a.lhs) visitExpr(l);
+        for (const r of a.rhs) visitExpr(r);
+        return;
+      }
+      case "ShortDeclStmt":
+        for (const v of (n as IR.IRShortDeclStmt).values) visitExpr(v);
+        return;
+      case "IncDecStmt": visitExpr((n as IR.IRIncDecStmt).x); return;
+      case "ReturnStmt":
+        for (const v of (n as IR.IRReturnStmt).values) visitExpr(v);
+        return;
+      case "IfStmt": {
+        const i = n as IR.IRIfStmt;
+        if (i.init) visit(i.init);
+        visitExpr(i.cond);
+        visit(i.body);
+        if (i.else_) visit(i.else_);
+        return;
+      }
+      case "ForStmt": {
+        const f = n as IR.IRForStmt;
+        if (f.init) visit(f.init);
+        if (f.cond) visitExpr(f.cond);
+        if (f.post) visit(f.post);
+        visit(f.body);
+        return;
+      }
+      case "RangeStmt": visit((n as IR.IRRangeStmt).body); return;
+      case "SwitchStmt": {
+        const sw = n as IR.IRSwitchStmt;
+        if (sw.tag) visitExpr(sw.tag);
+        for (const c of sw.cases) {
+          if (c.values) for (const v of c.values) visitExpr(v);
+          for (const s of c.body) visit(s);
+        }
+        return;
+      }
+      case "VarDecl": {
+        const v = n as IR.IRVarDecl;
+        if (v.value) visitExpr(v.value);
+        return;
+      }
+    }
+  }
+  visit(body);
+}
+
+/**
+ * Find a CallExpr in the ExprStmt tail position of a block — for rescuing
+ * procedural-looking functions whose last statement is a discard-style
+ * `foo(x)` that should actually be `return foo(x)`.
+ */
+function findTailExprCall(body: IR.IRBlockStmt): IR.IRCallExpr | null {
+  if (body.stmts.length === 0) return null;
+  const last = body.stmts[body.stmts.length - 1];
+  if (last.kind === "ExprStmt") {
+    const e = (last as IR.IRExprStmt).expr;
+    if (e.kind === "CallExpr") return e as IR.IRCallExpr;
+  }
+  if (last.kind === "IfStmt") {
+    // Recurse into each branch: if ALL terminal branches have a tail call
+    // to the same known function, we can't safely rewrite (would need to
+    // rewrite every branch independently). Skip for now — the common case
+    // is a flat tail.
+    return null;
+  }
+  return null;
+}
+
+/**
+ * Convert the tail ExprStmt(CallExpr) of a block into a ReturnStmt(CallExpr).
+ * Caller must have verified the shape via findTailExprCall.
+ */
+function rewriteTailExprToReturn(body: IR.IRBlockStmt): void {
+  if (body.stmts.length === 0) return;
+  const lastIdx = body.stmts.length - 1;
+  const last = body.stmts[lastIdx];
+  if (last.kind === "ExprStmt") {
+    const e = (last as IR.IRExprStmt).expr;
+    body.stmts[lastIdx] = {
+      kind: "ReturnStmt",
+      values: [e],
+      stmtIndex: (last as IR.IRExprStmt).stmtIndex ?? 0,
+    } as IR.IRReturnStmt;
+  }
+}
+
+/** Collect `{calleeName, args}` for every call to any function in `sigs`. */
+function collectCallsToKnownFuncs(
+  body: IR.IRBlockStmt,
+  sigs: Map<string, IR.IRFuncDecl>,
+  selfName: string,
+): Array<{ calleeName: string; args: IR.IRExpr[] }> {
+  const out: Array<{ calleeName: string; args: IR.IRExpr[] }> = [];
+
+  function visitExpr(e: IR.IRExpr): void {
+    if (!e) return;
+    if (e.kind === "CallExpr") {
+      const c = e as IR.IRCallExpr;
+      if (c.func.kind === "Ident") {
+        const n = (c.func as IR.IRIdent).name;
+        if (n !== selfName && sigs.has(n)) {
+          out.push({ calleeName: n, args: c.args });
+        }
+      }
+      for (const a of c.args) visitExpr(a);
+      visitExpr(c.func);
+      return;
+    }
+    if (e.kind === "BinaryExpr") {
+      const b = e as IR.IRBinaryExpr;
+      visitExpr(b.left); visitExpr(b.right); return;
+    }
+    if (e.kind === "UnaryExpr") { visitExpr((e as IR.IRUnaryExpr).x); return; }
+    if (e.kind === "ParenExpr") { visitExpr((e as IR.IRParenExpr).x); return; }
+    if (e.kind === "IndexExpr") {
+      const ix = e as IR.IRIndexExpr;
+      visitExpr(ix.x); visitExpr(ix.index); return;
+    }
+    if (e.kind === "SelectorExpr") { visitExpr((e as IR.IRSelectorExpr).x); return; }
+  }
+
+  function visit(n: IR.IRNode | IR.IRExprStmt): void {
+    if (!n) return;
+    switch (n.kind) {
+      case "BlockStmt":
+        for (const s of (n as IR.IRBlockStmt).stmts) visit(s); return;
+      case "ExprStmt": visitExpr((n as IR.IRExprStmt).expr); return;
+      case "AssignStmt": {
+        const a = n as IR.IRAssignStmt;
+        for (const l of a.lhs) visitExpr(l);
+        for (const r of a.rhs) visitExpr(r);
+        return;
+      }
+      case "ShortDeclStmt":
+        for (const v of (n as IR.IRShortDeclStmt).values) visitExpr(v);
+        return;
+      case "IncDecStmt": visitExpr((n as IR.IRIncDecStmt).x); return;
+      case "ReturnStmt":
+        for (const v of (n as IR.IRReturnStmt).values) visitExpr(v);
+        return;
+      case "IfStmt": {
+        const i = n as IR.IRIfStmt;
+        if (i.init) visit(i.init);
+        visitExpr(i.cond);
+        visit(i.body);
+        if (i.else_) visit(i.else_);
+        return;
+      }
+      case "ForStmt": {
+        const f = n as IR.IRForStmt;
+        if (f.init) visit(f.init);
+        if (f.cond) visitExpr(f.cond);
+        if (f.post) visit(f.post);
+        visit(f.body);
+        return;
+      }
+      case "RangeStmt": visit((n as IR.IRRangeStmt).body); return;
+      case "SwitchStmt": {
+        const sw = n as IR.IRSwitchStmt;
+        if (sw.tag) visitExpr(sw.tag);
+        for (const c of sw.cases) {
+          if (c.values) for (const v of c.values) visitExpr(v);
+          for (const s of c.body) visit(s);
+        }
+        return;
+      }
+      case "VarDecl": {
+        const v = n as IR.IRVarDecl;
+        if (v.value) visitExpr(v.value);
+        return;
+      }
+    }
+  }
+
+  visit(body);
+  return out;
+}
+
+/**
+ * Find the "tail call" of a function body — the single CallExpr that is
+ * reached on every return path. Returns the CallExpr if every terminal
+ * branch ends in a ReturnStmt whose value is the same call, otherwise null.
+ */
+function findTailCallExpr(body: IR.IRBlockStmt): IR.IRCallExpr | null {
+  const stmts = body.stmts;
+  if (stmts.length === 0) return null;
+  const last = stmts[stmts.length - 1];
+  if (last.kind === "ReturnStmt") {
+    const r = last as IR.IRReturnStmt;
+    if (r.values.length === 1 && r.values[0].kind === "CallExpr") {
+      return r.values[0] as IR.IRCallExpr;
+    }
+  }
+  return null;
 }
 
 function transformProgram(node: CstNode): IR.IRNode[] {
@@ -1407,8 +1908,10 @@ function transformIfStmt(node: CstNode): IR.IRIfStmt {
 function transformForStmt(node: CstNode): IR.IRForStmt | IR.IRRangeStmt {
   const si = nextStmtIndex();
 
-  // DotDot range: for i:=start..end { ... }
-  if (tok(node, "DotDot")) {
+  // DotDot range: for i:=start..end (exclusive, `i < end`)
+  // DotDotEq range: for i:=start..=end (inclusive, `i <= end`)
+  const isInclusive = tok(node, "DotDotEq") !== undefined;
+  if (tok(node, "DotDot") || isInclusive) {
     const loopVar = tokAll(node, "Ident")[0] || "i";
     const exprs = children(node, "expr");
     const start = exprs[0] ? transformExpr(exprs[0]) : { kind: "BasicLit" as const, type: "INT" as const, value: "0" };
@@ -1416,9 +1919,15 @@ function transformForStmt(node: CstNode): IR.IRForStmt | IR.IRRangeStmt {
     const sl = children(node, "stmtList");
     const body = sl.length > 0 ? transformStmtList(sl[sl.length - 1]) : { kind: "BlockStmt" as const, stmts: [] };
 
-    // Expand to: for i := start; i < end; i++
+    // Expand to: for i := start; i < end; i++ (exclusive)
+    //         or: for i := start; i <= end; i++ (inclusive)
     const init: IR.IRShortDeclStmt = { kind: "ShortDeclStmt", names: [loopVar], values: [start], stmtIndex: 0 };
-    const cond: IR.IRBinaryExpr = { kind: "BinaryExpr", left: { kind: "Ident", name: loopVar }, op: "<", right: end };
+    const cond: IR.IRBinaryExpr = {
+      kind: "BinaryExpr",
+      left: { kind: "Ident", name: loopVar },
+      op: isInclusive ? "<=" : "<",
+      right: end,
+    };
     const post: IR.IRIncDecStmt = { kind: "IncDecStmt", x: { kind: "Ident", name: loopVar }, op: "++", stmtIndex: 0 };
 
     return { kind: "ForStmt", init, cond, post, body, stmtIndex: si };
