@@ -1,284 +1,258 @@
 {
-  "timestamp": "2026-04-09T13:39:48.806Z",
-  "aGroup": [
+  "timestamp": "2026-04-12T07:09:22.776Z",
+  "results": [
     {
+      "group": "A (RosettaCode)",
       "name": "Ackermann",
       "javaTokens": 148,
-      "aetTokens": 95,
-      "saving": "35.8",
-      "status": "PASS",
-      "correctness": true,
-      "roundTrip": true,
-      "transpileMs": 324
+      "aetjTokens": 85,
+      "savings": "42.6",
+      "status": "PASS"
     },
     {
+      "group": "A (RosettaCode)",
       "name": "Binsearch",
       "javaTokens": 219,
-      "aetTokens": 142,
-      "saving": "35.2",
-      "status": "PASS",
-      "correctness": true,
-      "roundTrip": true,
-      "transpileMs": 308
+      "aetjTokens": 140,
+      "savings": "36.1",
+      "status": "PASS"
     },
     {
+      "group": "A (RosettaCode)",
       "name": "Bubblesort",
       "javaTokens": 215,
-      "aetTokens": 133,
-      "saving": "38.1",
-      "status": "PASS",
-      "correctness": true,
-      "roundTrip": true,
-      "transpileMs": 311
+      "aetjTokens": 124,
+      "savings": "42.3",
+      "status": "PASS"
     },
     {
+      "group": "A (RosettaCode)",
       "name": "Caesar",
       "javaTokens": 229,
-      "aetTokens": 153,
-      "saving": "33.2",
-      "status": "PASS",
-      "correctness": true,
-      "roundTrip": true,
-      "transpileMs": 310
+      "aetjTokens": 150,
+      "savings": "34.5",
+      "status": "PASS"
     },
     {
+      "group": "A (RosettaCode)",
       "name": "Doors100",
       "javaTokens": 116,
-      "aetTokens": 75,
-      "saving": "35.3",
-      "status": "PASS",
-      "correctness": true,
-      "roundTrip": true,
-      "transpileMs": 302
+      "aetjTokens": 75,
+      "savings": "35.3",
+      "status": "PASS"
     },
     {
+      "group": "A (RosettaCode)",
       "name": "Factorial",
       "javaTokens": 87,
-      "aetTokens": 56,
-      "saving": "35.6",
-      "status": "PASS",
-      "correctness": true,
-      "roundTrip": true,
-      "transpileMs": 304
+      "aetjTokens": 52,
+      "savings": "40.2",
+      "status": "PASS"
     },
     {
+      "group": "A (RosettaCode)",
+      "name": "Fibonacci",
+      "javaTokens": 93,
+      "aetjTokens": 51,
+      "savings": "45.2",
+      "status": "PASS"
+    },
+    {
+      "group": "A (RosettaCode)",
       "name": "Fizzbuzz",
       "javaTokens": 112,
-      "aetTokens": 58,
-      "saving": "48.2",
-      "status": "PASS",
-      "correctness": true,
-      "roundTrip": true,
-      "transpileMs": 304
+      "aetjTokens": 58,
+      "savings": "48.2",
+      "status": "PASS"
     },
     {
+      "group": "A (RosettaCode)",
       "name": "Gcd",
       "javaTokens": 79,
-      "aetTokens": 43,
-      "saving": "45.6",
-      "status": "PASS",
-      "correctness": true,
-      "roundTrip": true,
-      "transpileMs": 304
+      "aetjTokens": 41,
+      "savings": "48.1",
+      "status": "PASS"
     },
     {
+      "group": "A (RosettaCode)",
       "name": "Hanoi",
       "javaTokens": 161,
-      "aetTokens": 111,
-      "saving": "31.1",
-      "status": "PASS",
-      "correctness": true,
-      "roundTrip": true,
-      "transpileMs": 308
+      "aetjTokens": 110,
+      "savings": "31.7",
+      "status": "PASS"
     },
     {
+      "group": "A (RosettaCode)",
       "name": "Luhn",
       "javaTokens": 206,
-      "aetTokens": 132,
-      "saving": "35.9",
-      "status": "PASS",
-      "correctness": true,
-      "roundTrip": true,
-      "transpileMs": 308
+      "aetjTokens": 131,
+      "savings": "36.4",
+      "status": "PASS"
     },
     {
+      "group": "A (RosettaCode)",
       "name": "Matrix",
       "javaTokens": 272,
-      "aetTokens": 197,
-      "saving": "27.6",
-      "status": "PASS",
-      "correctness": true,
-      "roundTrip": false,
-      "transpileMs": 310
+      "aetjTokens": 177,
+      "savings": "34.9",
+      "status": "PASS"
     },
     {
+      "group": "A (RosettaCode)",
       "name": "Palindrome",
       "javaTokens": 131,
-      "aetTokens": 86,
-      "saving": "34.4",
-      "status": "PASS",
-      "correctness": true,
-      "roundTrip": true,
-      "transpileMs": 302
+      "aetjTokens": 85,
+      "savings": "35.1",
+      "status": "PASS"
     },
     {
+      "group": "A (RosettaCode)",
       "name": "Reverse",
       "javaTokens": 91,
-      "aetTokens": 64,
-      "saving": "29.7",
-      "status": "PASS",
-      "correctness": true,
-      "roundTrip": true,
-      "transpileMs": 301
+      "aetjTokens": 62,
+      "savings": "31.9",
+      "status": "PASS"
     },
     {
+      "group": "A (RosettaCode)",
       "name": "Roman",
       "javaTokens": 229,
-      "aetTokens": 163,
-      "saving": "28.8",
-      "status": "PASS",
-      "correctness": true,
-      "roundTrip": false,
-      "transpileMs": 304
+      "aetjTokens": 156,
+      "savings": "31.9",
+      "status": "PASS"
     },
     {
+      "group": "A (RosettaCode)",
       "name": "Tokenize",
       "javaTokens": 88,
-      "aetTokens": 59,
-      "saving": "33.0",
-      "status": "PASS",
-      "correctness": true,
-      "roundTrip": true,
-      "transpileMs": 304
+      "aetjTokens": 59,
+      "savings": "33.0",
+      "status": "PASS"
     },
     {
-      "name": "fibonacci",
-      "javaTokens": 93,
-      "aetTokens": 51,
-      "saving": "45.2",
-      "status": "PASS",
-      "correctness": true,
-      "roundTrip": true,
-      "transpileMs": 306
-    }
-  ],
-  "bGroup": [
-    {
+      "group": "B (Real-World)",
       "name": "b01_maxmin",
       "javaTokens": 465,
-      "aetTokens": 322,
-      "saving": "30.8",
-      "status": "PASS",
-      "correctness": true,
-      "roundTrip": true,
-      "transpileMs": 311
+      "aetjTokens": 319,
+      "savings": "31.4",
+      "status": "PASS"
     },
     {
+      "group": "B (Real-World)",
       "name": "b02_wordcount",
       "javaTokens": 357,
-      "aetTokens": 258,
-      "saving": "27.7",
-      "status": "PASS",
-      "correctness": true,
-      "roundTrip": true,
-      "transpileMs": 309
+      "aetjTokens": 243,
+      "savings": "31.9",
+      "status": "PASS"
     },
     {
+      "group": "B (Real-World)",
       "name": "b03_stack",
       "javaTokens": 432,
-      "aetTokens": 295,
-      "saving": "31.7",
-      "status": "PASS",
-      "correctness": true,
-      "roundTrip": false,
-      "transpileMs": 313
+      "aetjTokens": 284,
+      "savings": "34.3",
+      "status": "PASS"
     },
     {
+      "group": "B (Real-World)",
       "name": "b04_celsius",
       "javaTokens": 1038,
-      "aetTokens": 688,
-      "saving": "33.7",
-      "status": "PASS",
-      "correctness": true,
-      "roundTrip": false,
-      "transpileMs": 319
+      "aetjTokens": 686,
+      "savings": "33.9",
+      "status": "PASS"
     },
     {
+      "group": "B (Real-World)",
       "name": "b05_validate",
       "javaTokens": 1225,
-      "aetTokens": 927,
-      "saving": "24.3",
-      "status": "PASS",
-      "correctness": true,
-      "roundTrip": true,
-      "transpileMs": 322
+      "aetjTokens": 924,
+      "savings": "24.6",
+      "status": "PASS"
     },
     {
+      "group": "B (Real-World)",
       "name": "b06_kvstore",
       "javaTokens": 969,
-      "aetTokens": 755,
-      "saving": "22.1",
-      "status": "PASS",
-      "correctness": true,
-      "roundTrip": false,
-      "transpileMs": 316
+      "aetjTokens": 729,
+      "savings": "24.8",
+      "status": "PASS"
     },
     {
+      "group": "B (Real-World)",
       "name": "b07_jsonlike",
       "javaTokens": 1320,
-      "aetTokens": 978,
-      "saving": "25.9",
-      "status": "PASS",
-      "correctness": true,
-      "roundTrip": false,
-      "transpileMs": 324
+      "aetjTokens": 950,
+      "savings": "28.0",
+      "status": "PASS"
     },
     {
+      "group": "B (Real-World)",
       "name": "b08_csv",
       "javaTokens": 1448,
-      "aetTokens": 1097,
-      "saving": "24.2",
-      "status": "PASS",
-      "correctness": true,
-      "roundTrip": false,
-      "transpileMs": 324
+      "aetjTokens": 1009,
+      "savings": "30.3",
+      "status": "PASS"
     },
     {
+      "group": "B (Real-World)",
       "name": "b09_calculator",
       "javaTokens": 1812,
-      "aetTokens": 1275,
-      "saving": "29.6",
-      "status": "PASS",
-      "correctness": true,
-      "roundTrip": false,
-      "transpileMs": 325
+      "aetjTokens": 1274,
+      "savings": "29.7",
+      "status": "PASS"
     },
     {
+      "group": "B (Real-World)",
       "name": "b10_linkedlist",
       "javaTokens": 3098,
-      "aetTokens": 2304,
-      "saving": "25.6",
-      "status": "PASS",
-      "correctness": true,
-      "roundTrip": false,
-      "transpileMs": 343
+      "aetjTokens": 2222,
+      "savings": "28.3",
+      "status": "PASS"
+    },
+    {
+      "group": "Bp (Boilerplate)",
+      "name": "AddressVO",
+      "javaTokens": 546,
+      "aetjTokens": 341,
+      "savings": "37.5",
+      "status": "PASS"
+    },
+    {
+      "group": "Bp (Boilerplate)",
+      "name": "CustomerDTO",
+      "javaTokens": 865,
+      "aetjTokens": 381,
+      "savings": "56.0",
+      "status": "PASS"
+    },
+    {
+      "group": "Bp (Boilerplate)",
+      "name": "EmployeeRecord",
+      "javaTokens": 769,
+      "aetjTokens": 459,
+      "savings": "40.3",
+      "status": "PASS"
+    },
+    {
+      "group": "Bp (Boilerplate)",
+      "name": "InvoiceDTO",
+      "javaTokens": 1160,
+      "aetjTokens": 784,
+      "savings": "32.4",
+      "status": "PASS"
+    },
+    {
+      "group": "Bp (Boilerplate)",
+      "name": "ProductEntity",
+      "javaTokens": 890,
+      "aetjTokens": 387,
+      "savings": "56.5",
+      "status": "PASS"
     }
   ],
   "summary": {
-    "totalPass": 26,
-    "totalFail": 0,
-    "totalError": 0,
-    "totalJava": 14640,
-    "totalAet": 10517,
-    "avgSaving": "28.2",
-    "rtPass": 17,
-    "avgSpeed": "312"
-  },
-  "speedTest": {
-    "file": "b10_linkedlist.java",
-    "iterations": 10,
-    "avgMs": 329,
-    "minMs": 326,
-    "maxMs": 332
+    "passed": 31,
+    "total": 31,
+    "savings": "33.5"
   }
 }

@@ -1,1 +1,1 @@
-!go-v2;isPalindrome(s:string){n:=#s;for i:=0..n/2{if s[i]!=s[n-1-i]{false}};true};main(){words:=[]string{"racecar","hello","level","madam"};for _,w:=range words{pf("%s: %t\n",w,isPalindrome(w))}}
+a(s){n:=#s;for i:=0..n/2{if s[i]!=s[n-1-i]{false}};true};main(){words:=[]string{"racecar","hello","level","madam"};for _,w:=range words{pf("%s: %t\n",w,a(w))}}

@@ -1,1 +1,1 @@
-!go-v2;main(){var doors [101]bool;for pass:=1;pass<=100;pass++{for door:=pass;door<=100;door+=pass{doors[door]=!doors[door]}};fmt.Print("Open doors:");for i:=1;i<=100;i++{if doors[i]{pf(" %d",i)}};pl()}
+main(){var doors [101]bool;for pass:=1..=100{for door:=pass;door<=100;door+=pass{doors[door]=!doors[door]}};pt("Open doors:");for i:=1..=100{if doors[i]{pf(" %d",i)}};pl()}

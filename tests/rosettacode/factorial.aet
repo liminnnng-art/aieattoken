@@ -1,1 +1,1 @@
-!go-v2;factorial(n){if n==0{1};n*factorial(n-1)};main(){for i:=0;i<=10;i++{pf("%d! = %d\n",i,factorial(i))}}
+a(n){if n==0{1};n*a(n-1)};main(){for i:=0..=10{pf("%d! = %d\n",i,a(i))}}

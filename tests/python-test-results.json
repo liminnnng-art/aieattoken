@@ -435,8 +435,8 @@
   ],
   "speed": {
     "totalLines": 595,
-    "totalTimeMs": "584.3",
-    "linesPerSec": "1018",
+    "totalTimeMs": "478.8",
+    "linesPerSec": "1243",
     "iterations": 10
   }
 }

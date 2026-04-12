@@ -1,1 +1,1 @@
-!go-v2;main(){for i:=1;i<=100;i++{switch{case i%15==0:pl("FizzBuzz");case i%3==0:pl("Fizz");case i%5==0:pl("Buzz");default:pl(i)}}}
+main(){for i:=1..=100{switch{case i%15==0:pl("FizzBuzz");case i%3==0:pl("Fizz");case i%5==0:pl("Buzz");default:pl(i)}}}
